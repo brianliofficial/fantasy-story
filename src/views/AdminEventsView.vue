@@ -6,72 +6,10 @@ import { useGame } from '../composables/useGame'
 import { cloneData } from '../core/clone'
 import { blankEvent } from '../core/defaults'
 import { appendEvent, moveEvent } from '../core/pools'
-import type { AgeWindow, GameEventConfig, MenuKey } from '../core/types'
+import type { GameEventConfig } from '../core/types'
 import { eventError } from '../core/validate'
 
-const { events, pools, config, saveEvents, savePools, resetEvents } = useGame()
-
-const menuRows: { key: MenuKey; label: string }[] = [
-  { key: 'infant', label: 'Infant' },
-  { key: 'childhood', label: 'Childhood' },
-  { key: 'job', label: 'Job' },
-  { key: 'school', label: 'School' },
-  { key: 'romance', label: 'Romance' },
-  { key: 'crime', label: 'Crime' },
-  { key: 'guild', label: 'Guild' },
-  { key: 'assets', label: 'Assets' },
-  { key: 'activities', label: 'Activities' },
-]
-
-function ageNumber(raw: string, fallback: number): number {
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(0, Math.min(120, Math.round(parsed)))
-}
-
-function setMenu(key: MenuKey, edge: 'min' | 'max', event: Event) {
-  const raw = (event.target as HTMLInputElement).value
-  const current = config.value.menus[key]
-  if (edge === 'min') {
-    const minAge = ageNumber(raw, current.minAge)
-    const next: AgeWindow = { minAge }
-    if (current.maxAge != null) next.maxAge = Math.max(minAge, current.maxAge)
-    config.value.menus[key] = next
-    return
-  }
-  if (raw.trim() === '') {
-    config.value.menus[key] = { minAge: current.minAge }
-    return
-  }
-  config.value.menus[key] = {
-    minAge: current.minAge,
-    maxAge: Math.max(current.minAge, ageNumber(raw, current.minAge)),
-  }
-}
-
-function setClassEvents(edge: 'min' | 'max', event: Event) {
-  const raw = (event.target as HTMLInputElement).value
-  const current = config.value.classEvents
-  if (edge === 'min') {
-    const minAge = ageNumber(raw, current.minAge)
-    const next: AgeWindow = { minAge }
-    if (current.maxAge != null) next.maxAge = Math.max(minAge, current.maxAge)
-    config.value.classEvents = next
-    return
-  }
-  if (raw.trim() === '') {
-    config.value.classEvents = { minAge: current.minAge }
-    return
-  }
-  config.value.classEvents = {
-    minAge: current.minAge,
-    maxAge: Math.max(current.minAge, ageNumber(raw, current.minAge)),
-  }
-}
-
-function setTeenage(event: Event) {
-  config.value.teenageAge = ageNumber((event.target as HTMLInputElement).value, config.value.teenageAge)
-}
+const { events, pools, saveEvents, savePools, resetEvents } = useGame()
 const editing = ref<GameEventConfig | null>(null)
 const error = ref('')
 const pendingDelete = ref('')
@@ -153,30 +91,6 @@ function restore() {
       </nav>
     </header>
     <p class="pool-note">Each column is a pool. Drag a card by the handle, or open it to edit the full event.</p>
-    <section class="pool-settings">
-      <h2>Pool setting</h2>
-      <p>Set the ages when each menu appears. Leave the last age blank to keep it open.</p>
-      <div class="settings-grid">
-        <label v-for="row in menuRows" :key="row.key" class="field">
-          <span>{{ row.label }}</span>
-          <span class="age-pair">
-            <input type="number" min="0" max="120" :value="config.menus[row.key].minAge" :aria-label="`${row.label} from`" @input="setMenu(row.key, 'min', $event)">
-            <input type="number" min="0" max="120" :value="config.menus[row.key].maxAge ?? ''" :aria-label="`${row.label} to`" placeholder="open" @input="setMenu(row.key, 'max', $event)">
-          </span>
-        </label>
-        <label class="field">
-          <span>Class events</span>
-          <span class="age-pair">
-            <input type="number" min="0" max="120" :value="config.classEvents.minAge" aria-label="Class events from" @input="setClassEvents('min', $event)">
-            <input type="number" min="0" max="120" :value="config.classEvents.maxAge ?? ''" aria-label="Class events to" placeholder="open" @input="setClassEvents('max', $event)">
-          </span>
-        </label>
-        <label class="field">
-          <span>Teenage milestone</span>
-          <input type="number" min="0" max="120" :value="config.teenageAge" aria-label="Teenage milestone age" @input="setTeenage">
-        </label>
-      </div>
-    </section>
     <div class="choice-row pool-toolbar">
       <button type="button" class="btn" @click="restore">Restore defaults</button>
     </div>
