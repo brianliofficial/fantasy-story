@@ -26,7 +26,7 @@ import {
   yearActivity,
 } from '../core/engine'
 import { sanitizeConfig, sanitizeLife } from '../core/sanitize'
-import { ledgerPools } from '../core/pools'
+import { ledgerPools, sameLedger } from '../core/pools'
 import type {
   ChildhoodAction,
   GameConfig,
@@ -87,6 +87,9 @@ export interface GameStore {
   purchase: (tier: SocialClass) => void
   saveEvents: (events: GameEventConfig[]) => void
   savePools: (pools: string[]) => void
+  refreshLedger: () => Promise<boolean>
+  ledgerStamp: () => number
+  acknowledgeLedger: (stamp: number) => void
   saveConfig: (config: GameConfig) => void
   resetConfig: () => void
   forgetLife: () => void
@@ -104,7 +107,8 @@ export function provideGame(): GameStore {
   const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
   const hasLife = computed(() => life.value !== null)
   const ledgerNotice = ref<{ ok: boolean; text: string } | null>(null)
-  let edits = 0
+  let revision = 0
+  let acked = 0
 
   watch(life, (value) => {
     if (value) write(LIFE_KEY, value)
@@ -212,13 +216,34 @@ export function provideGame(): GameStore {
     },
     ledgerNotice,
     saveEvents(next) {
-      edits += 1
+      revision += 1
       events.value = next
       pools.value = ledgerPools(pools.value, next)
     },
     savePools(next) {
-      edits += 1
+      revision += 1
       pools.value = ledgerPools(next, events.value)
+    },
+    async refreshLedger() {
+      if (!supabaseConfigured() || revision !== acked) return false
+      const seen = revision
+      try {
+        const remote = await loadEventLedger()
+        if (revision !== seen || revision !== acked) return false
+        const nextPools = ledgerPools(remote.pools, remote.events)
+        if (sameLedger(events.value, pools.value, remote.events, nextPools)) return false
+        events.value = remote.events
+        pools.value = nextPools
+        return true
+      } catch {
+        return false
+      }
+    },
+    ledgerStamp() {
+      return revision
+    },
+    acknowledgeLedger(stamp) {
+      if (stamp > acked) acked = stamp
     },
     saveConfig(next) {
       config.value = next
@@ -240,10 +265,10 @@ export function provideGame(): GameStore {
       ledgerNotice.value = { ok: false, text: 'Supabase is not configured.' }
       return
     }
-    const seen = edits
+    const seen = revision
     try {
       const remote = await loadEventLedger()
-      if (edits !== seen) return
+      if (revision !== seen) return
       events.value = remote.events
       pools.value = ledgerPools(remote.pools, remote.events)
       const count = `${remote.events.length} event${remote.events.length === 1 ? '' : 's'} are set`

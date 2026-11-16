@@ -1,8 +1,19 @@
+import { sanitizeEvents } from './sanitize'
 import { DEFAULT_POOLS } from './types'
 import type { GameEventConfig } from './types'
 
 export function defaultPools(): string[] {
   return [...DEFAULT_POOLS]
+}
+
+export function sameLedger(
+  events: GameEventConfig[],
+  pools: string[],
+  nextEvents: GameEventConfig[],
+  nextPools: string[],
+): boolean {
+  return JSON.stringify(sanitizeEvents(events) ?? []) === JSON.stringify(sanitizeEvents(nextEvents) ?? [])
+    && JSON.stringify(pools) === JSON.stringify(nextPools)
 }
 
 export function ledgerPools(poolNames: string[], events: GameEventConfig[]): string[] {

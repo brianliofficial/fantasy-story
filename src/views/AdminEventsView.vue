@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import EventBoard from '../components/EventBoard.vue'
 import EventCardForm from '../components/EventCardForm.vue'
 import { useGame } from '../composables/useGame'
@@ -10,7 +10,7 @@ import { appendEvent, moveEvent } from '../core/pools'
 import type { GameEventConfig } from '../core/types'
 import { eventError } from '../core/validate'
 
-const { events, pools, saveEvents, savePools, ledgerNotice } = useGame()
+const { events, pools, saveEvents, savePools, ledgerNotice, refreshLedger, ledgerStamp, acknowledgeLedger } = useGame()
 const editing = ref<GameEventConfig | null>(null)
 const error = ref('')
 const pendingDelete = ref('')
@@ -18,12 +18,38 @@ const notice = ref<{ ok: boolean; text: string; label: string } | null>(null)
 const configured = supabaseConfigured()
 let noticeTimer = 0
 let uploadQueue = Promise.resolve()
+let writes = 0
+let pollTimer = 0
 
 watch(ledgerNotice, (value) => {
   if (!value) return
   const label = value.ok ? (value.text.startsWith('Event pool loaded') ? 'Loaded' : 'Saved') : 'Not saved'
   showNotice(value.ok, value.text, label)
+  armPoll()
 }, { immediate: true })
+
+function armPoll() {
+  if (pollTimer || !configured) return
+  pollTimer = window.setInterval(() => { void pullRemote() }, 2000)
+  document.addEventListener('visibilitychange', onVisible)
+}
+
+function onVisible() {
+  if (!document.hidden) void pullRemote()
+}
+
+async function pullRemote() {
+  if (writes > 0 || document.hidden) return
+  const changed = await refreshLedger()
+  if (!changed) return
+  const count = `${events.value.length} event${events.value.length === 1 ? '' : 's'} are set`
+  showNotice(true, `Event pool updated. ${count}.`, 'Updated')
+}
+
+onUnmounted(() => {
+  window.clearInterval(pollTimer)
+  document.removeEventListener('visibilitychange', onVisible)
+})
 
 function open(id: string) {
   const event = events.value.find((item) => item.id === id)
@@ -52,18 +78,24 @@ function showNotice(ok: boolean, text: string, label = ok ? 'Saved' : 'Not saved
 }
 
 function upload(nextEvents: GameEventConfig[], nextPools: string[], title: string) {
+  const stamp = ledgerStamp()
   const count = `${nextEvents.length} event${nextEvents.length === 1 ? '' : 's'} are set`
+  writes += 1
   uploadQueue = uploadQueue.then(async () => {
-    if (!configured) {
-      showNotice(true, `${title} saved. ${count}.`)
-      return
-    }
     try {
+      if (!configured) {
+        acknowledgeLedger(stamp)
+        showNotice(true, `${title} saved. ${count}.`)
+        return
+      }
       await saveEventLedger(nextEvents, nextPools)
+      acknowledgeLedger(stamp)
       showNotice(true, `${title} saved. ${count}.`)
     } catch (caught) {
       const detail = caught instanceof Error ? caught.message : 'Supabase did not accept the event.'
       showNotice(false, detail)
+    } finally {
+      writes -= 1
     }
   })
 }

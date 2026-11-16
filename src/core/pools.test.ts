@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { blankEvent } from './defaults'
-import { appendEvent, ledgerPools, moveEvent, sanitizePools } from './pools'
+import { appendEvent, ledgerPools, moveEvent, sameLedger, sanitizePools } from './pools'
 import type { GameEventConfig } from './types'
 
 function card(id: string, type: string): GameEventConfig {
@@ -32,6 +32,15 @@ describe('event pools', () => {
 
   it('uses the supabase pool list without adding the built-in pools', () => {
     assert.deepEqual(ledgerPools(['War'], []), ['War'])
+  })
+
+  it('treats the same cards and pools as one ledger', () => {
+    const events = [card('a', 'Infant')]
+    const copy = JSON.parse(JSON.stringify(events)) as GameEventConfig[]
+    assert.equal(sameLedger(events, ['Infant'], copy, ['Infant']), true)
+    copy[0]!.title = 'Changed'
+    assert.equal(sameLedger(events, ['Infant'], copy, ['Infant']), false)
+    assert.equal(sameLedger(events, ['Infant'], events, ['Child']), false)
   })
 
   it('appends a new card to the end of its pool', () => {
