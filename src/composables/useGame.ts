@@ -1,5 +1,5 @@
 import { computed, inject, provide, ref, watch, type InjectionKey, type Ref } from 'vue'
-import { seedEvents, defaultConfig, withHouseFire, withTeenage } from '../core/defaults'
+import { seedEvents, defaultConfig, withChildhood, withHouseFire, withTeenage } from '../core/defaults'
 import {
   ageUp,
   answerTeacher,
@@ -105,7 +105,7 @@ export function provideGame(): GameStore {
   const savedLife = sanitizeLife(read(LIFE_KEY))
   const savedEvents = sanitizeEvents(read(EVENTS_KEY))
   const life = ref<Life | null>(savedLife)
-  const events = ref<GameEventConfig[]>(withHouseFire(withTeenage(savedEvents ?? seedEvents())))
+  const events = ref<GameEventConfig[]>(withHouseFire(withTeenage(withChildhood(savedEvents ?? seedEvents()))))
   const pools = ref<string[]>(withClassPools(sanitizePools(read(POOLS_KEY), events.value)))
   const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
   const hasLife = computed(() => life.value !== null)
@@ -222,7 +222,7 @@ export function provideGame(): GameStore {
       config.value = next
     },
     resetEvents() {
-      events.value = withTeenage(seedEvents())
+      events.value = withTeenage(withChildhood(seedEvents()))
       pools.value = defaultPools()
     },
     resetConfig() {

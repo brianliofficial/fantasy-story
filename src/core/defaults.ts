@@ -59,6 +59,8 @@ export function houseFireEvent(): GameEventConfig {
     type: 'Anytime',
     title: 'House fire',
     description: 'Your home catches fire and burns down.',
+    showLimit: 5,
+    repeatAfter: 10,
     options: [
       {
         id: 'rebuild',
@@ -87,8 +89,10 @@ export function houseFireEvent(): GameEventConfig {
 }
 
 export function withHouseFire(events: GameEventConfig[]): GameEventConfig[] {
-  if (events.some((event) => event.id === HOUSE_FIRE_ID)) return events
-  return [houseFireEvent(), ...events]
+  if (!events.some((event) => event.id === HOUSE_FIRE_ID)) return [houseFireEvent(), ...events]
+  return events.map((event) => (
+    event.id === HOUSE_FIRE_ID && event.repeatAfter == null ? { ...event, repeatAfter: 10 } : event
+  ))
 }
 
 export const TEENAGE_ID = 'Milestone_event_2_teenage'
@@ -101,10 +105,33 @@ export function teenageMilestone(): GameEventConfig {
     description: 'You reach the end of your basic education.',
     minAge: 16,
     maxAge: 16,
+    showLimit: 1,
     options: [
       option('continue', 'Continue to study', 'You decide what comes next.', {}),
     ],
   }
+}
+
+export const CHILDHOOD_ID = 'Milestone_event_1_childhood'
+
+export function childhoodMilestone(): GameEventConfig {
+  return {
+    id: CHILDHOOD_ID,
+    type: 'Milestone',
+    title: 'Childhood',
+    description: 'You are expected to take on responsibilities of your household.',
+    minAge: 6,
+    maxAge: 6,
+    showLimit: 1,
+    options: [
+      option('continue', 'Continue', 'You face what your household asks of you.', {}),
+    ],
+  }
+}
+
+export function withChildhood(events: GameEventConfig[]): GameEventConfig[] {
+  if (events.some((event) => event.id === CHILDHOOD_ID)) return events
+  return [...events, childhoodMilestone()]
 }
 
 export function withTeenage(events: GameEventConfig[]): GameEventConfig[] {
@@ -170,6 +197,7 @@ export function seedEvents(): GameEventConfig[] {
       type: 'Anytime',
       title: 'Market day',
       description: 'A merchant spreads silk and spices across a creaking cart and watches who comes close.',
+      showLimit: 5,
       minAge: 14,
       maxAge: 70,
       options: [
@@ -197,11 +225,13 @@ export function seedEvents(): GameEventConfig[] {
       description: 'The village gathers for your name day. Someone asks what you will become.',
       minAge: 18,
       maxAge: 18,
+      showLimit: 1,
       options: [
         option('declare', 'Declare your ambition', 'People remember the way you said it.', { charisma: 6, parentRelationship: 4 }),
         option('toast', 'Raise a quiet toast', 'You drink with your family and let the night be simple.', { constitution: 2, parentRelationship: 8 }),
       ],
     },
+    childhoodMilestone(),
     teenageMilestone(),
   ]
 }
@@ -214,6 +244,7 @@ export function blankEvent(): GameEventConfig {
     description: '',
     minAge: 0,
     maxAge: 80,
+    showLimit: 5,
     options: [
       {
         id: uid(),

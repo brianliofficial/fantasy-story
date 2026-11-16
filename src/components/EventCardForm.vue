@@ -11,6 +11,7 @@ const emit = defineEmits<{ change: [event: GameEventConfig]; save: [event: GameE
 const effectKeys = ['constitution', 'charisma', 'intelligence', 'gold', 'parentRelationship'] as const
 const optionIndex = ref(0)
 const logSide = ref<'success' | 'failure'>('success')
+const effectDrafts = ref<Record<string, string>>({})
 
 const current = computed(() => props.event.options[optionIndex.value] ?? props.event.options[0])
 const hasCheck = computed(() => Boolean(current.value?.checkStat || current.value?.checkHouse))
@@ -66,9 +67,12 @@ function addOption() {
   update({ options })
 }
 
-function deleteOption() {
-  if (!current.value || props.event.options.length <= 1) return
-  update({ options: props.event.options.filter((item) => item.id !== current.value.id) })
+function deleteOptionAt(index: number) {
+  if (props.event.options.length <= 1) return
+  const options = props.event.options.filter((_, itemIndex) => itemIndex !== index)
+  if (optionIndex.value >= options.length) optionIndex.value = options.length - 1
+  else if (index < optionIndex.value) optionIndex.value -= 1
+  update({ options })
 }
 
 function updateOption(optionId: string, patch: Partial<EventOption>) {
@@ -77,16 +81,67 @@ function updateOption(optionId: string, patch: Partial<EventOption>) {
   })
 }
 
+function draftKey(optionId: string, side: 'success' | 'failure', key: keyof StatChange) {
+  return `${optionId}:${side}:${key}`
+}
+
+function effectValue(optionId: string, side: 'success' | 'failure', key: keyof StatChange, value: number | undefined) {
+  const id = draftKey(optionId, side, key)
+  if (Object.prototype.hasOwnProperty.call(effectDrafts.value, id)) return effectDrafts.value[id]
+  return value == null ? '' : String(value)
+}
+
+function rememberDraft(id: string, raw: string) {
+  effectDrafts.value = { ...effectDrafts.value, [id]: raw }
+}
+
+function forgetDraft(id: string) {
+  if (!Object.prototype.hasOwnProperty.call(effectDrafts.value, id)) return
+  const next = { ...effectDrafts.value }
+  delete next[id]
+  effectDrafts.value = next
+}
+
 function updateEffect(optionId: string, side: 'success' | 'failure', key: keyof StatChange, raw: string) {
   const option = props.event.options.find((item) => item.id === optionId)
   if (!option) return
+  const id = draftKey(optionId, side, key)
   const currentSide = side === 'success' ? option.success : (option.failure ?? { log: '', effect: {} })
   const effect = { ...currentSide.effect }
-  if (raw.trim() === '') delete effect[key]
-  else effect[key] = Number(raw)
+  if (raw.trim() === '') {
+    forgetDraft(id)
+    delete effect[key]
+  } else if (/^-?\d+$/.test(raw.trim())) {
+    forgetDraft(id)
+    effect[key] = Number(raw)
+  } else if (/^-?\d*$/.test(raw)) {
+    rememberDraft(id, raw)
+    return
+  } else {
+    return
+  }
   const next = { ...currentSide, effect }
   if (side === 'success') updateOption(optionId, { success: next })
   else updateOption(optionId, { failure: next })
+}
+
+function setShowLimit(raw: string) {
+  if (raw.trim() === '') {
+    update({ showLimit: undefined })
+    return
+  }
+  if (!/^\d+$/.test(raw.trim())) return
+  const cap = props.event.type === 'Anytime' ? 5 : 99
+  update({ showLimit: Math.max(1, Math.min(cap, Number(raw))) })
+}
+
+function setRepeatAfter(raw: string) {
+  if (raw.trim() === '') {
+    update({ repeatAfter: undefined })
+    return
+  }
+  if (!/^\d+$/.test(raw.trim())) return
+  update({ repeatAfter: Math.max(0, Math.min(120, Number(raw))) })
 }
 
 function checkValue(option: EventOption): string {
@@ -147,8 +202,15 @@ const poolOptions = computed(() => (
         <label class="field">Max age
           <input :value="event.maxAge ?? ''" type="number" min="0" max="120" placeholder="Any" @input="setAge('maxAge', ($event.target as HTMLInputElement).value)" />
         </label>
+        <label class="field">Life log times
+          <input :value="event.showLimit ?? ''" type="text" inputmode="text" :placeholder="event.type === 'Anytime' ? '5' : event.type === 'Milestone' ? '1' : 'Any'" @input="setShowLimit(($event.target as HTMLInputElement).value)" />
+        </label>
+        <label class="field">Years between
+          <input :value="event.repeatAfter ?? ''" type="text" inputmode="text" placeholder="1" @input="setRepeatAfter(($event.target as HTMLInputElement).value)" />
+        </label>
       </div>
       <p class="hint">Leave an age blank to leave that side open. Leave both blank and the event can happen at any age.</p>
+      <p v-if="event.type === 'Anytime'" class="hint">Anytime events appear at most 5 times in one life. Years between keeps a repeat from happening again until that many years have passed.</p>
       <p class="hint">Race filter. Leave all off to allow every race.</p>
       <div class="toggle-row">
         <button v-for="race in RACES" :key="race" type="button" class="pill" :class="{ 'is-selected': event.requiredRace?.includes(race) }" @click="toggleRace(race)">{{ race }}</button>
@@ -163,18 +225,27 @@ const poolOptions = computed(() => (
     </label>
     <div class="tab-set">
     <div class="tab-bar" role="tablist" aria-label="Options">
-      <button
+      <div
         v-for="(option, index) in event.options"
         :key="option.id"
-        type="button"
         class="tab"
         role="tab"
+        tabindex="0"
         :aria-selected="optionIndex === index"
         :class="{ 'is-selected': optionIndex === index }"
         @click="selectOption(index)"
-      >Option {{ index + 1 }}</button>
+        @keydown.enter.prevent="selectOption(index)"
+      >
+        <span>Option {{ index + 1 }}</span>
+        <button
+          type="button"
+          class="tab-x"
+          :aria-label="`Remove option ${index + 1}`"
+          :disabled="event.options.length <= 1"
+          @click.stop="deleteOptionAt(index)"
+        >×</button>
+      </div>
       <button type="button" class="tab-plus" aria-label="Add option" :disabled="event.options.length >= 4" @click="addOption">+</button>
-      <button type="button" class="tab-delete" :disabled="event.options.length <= 1" @click="deleteOption">Delete option</button>
     </div>
     <section v-if="current" class="option-card tab-panel">
       <h2>Option {{ optionIndex + 1 }}</h2>
@@ -206,7 +277,7 @@ const poolOptions = computed(() => (
         </label>
         <div class="effect-grid">
           <label v-for="key in effectKeys" :key="`s-${key}`" class="field">{{ key }}
-            <input :value="current.success.effect[key] ?? ''" type="number" @input="updateEffect(current.id, 'success', key, ($event.target as HTMLInputElement).value)" />
+            <input :value="effectValue(current.id, 'success', key, current.success.effect[key])" type="text" inputmode="text" autocomplete="off" @input="updateEffect(current.id, 'success', key, ($event.target as HTMLInputElement).value)" />
           </label>
         </div>
       </template>
@@ -216,7 +287,7 @@ const poolOptions = computed(() => (
         </label>
         <div class="effect-grid">
           <label v-for="key in effectKeys" :key="`f-${key}`" class="field">{{ key }}
-            <input :value="current.failure?.effect[key] ?? ''" type="number" @input="updateEffect(current.id, 'failure', key, ($event.target as HTMLInputElement).value)" />
+            <input :value="effectValue(current.id, 'failure', key, current.failure?.effect[key])" type="text" inputmode="text" autocomplete="off" @input="updateEffect(current.id, 'failure', key, ($event.target as HTMLInputElement).value)" />
           </label>
         </div>
       </template>

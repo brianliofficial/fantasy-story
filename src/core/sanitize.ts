@@ -105,6 +105,19 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
     const classes = value.requiredClass.filter(isClass)
     if (classes.length > 0) event.requiredClass = classes
   }
+  if (typeof value.showLimit === 'number' && Number.isFinite(value.showLimit)) {
+    const cap = event.type === 'Anytime' ? 5 : 99
+    event.showLimit = Math.max(1, Math.min(cap, Math.round(value.showLimit)))
+  } else if (event.type === 'Anytime') {
+    event.showLimit = 5
+  } else if (event.type === 'Milestone') {
+    event.showLimit = 1
+  }
+  if (typeof value.repeatAfter === 'number' && Number.isFinite(value.repeatAfter)) {
+    event.repeatAfter = Math.max(0, Math.min(120, Math.round(value.repeatAfter)))
+  } else if (event.id === 'Anytime_event_001') {
+    event.repeatAfter = 10
+  }
   return event
 }
 
@@ -347,5 +360,17 @@ export function sanitizeLife(value: unknown): Life | null {
     usedThisYear: Array.isArray(value.usedThisYear)
       ? value.usedThisYear.filter((item): item is YearActivity => YEAR_ACTIVITIES.includes(item as YearActivity))
       : [],
+    shownEvents: sanitizeShown(value.shownEvents),
+    eventYears: sanitizeShown(value.eventYears),
   }
+}
+
+function sanitizeShown(value: unknown): Record<string, number> {
+  if (!isRecord(value)) return {}
+  const shown: Record<string, number> = {}
+  for (const [key, count] of Object.entries(value)) {
+    if (!key || typeof count !== 'number' || !Number.isFinite(count)) continue
+    shown[key.slice(0, 80)] = Math.max(0, Math.min(99, Math.round(count)))
+  }
+  return shown
 }

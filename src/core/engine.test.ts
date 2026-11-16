@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { defaultConfig, seedEvents } from './defaults'
+import { childhoodMilestone, defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
 import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
 import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
 
@@ -43,6 +43,27 @@ describe('fantasylife engine', () => {
     assert.equal(dwarf.constitution, 20)
     assert.equal(dwarf.charisma, 0)
     assert.equal(dwarf.intelligence, 0)
+  })
+
+  it('rolls each score from 0 to 100 before the race bonus', () => {
+    const human = createLife({
+      forename: 'Mira', surname: 'Hale', gender: 'female', race: 'Human', socialClass: 'Peasant',
+    }, defaultConfig(), scripted([0.5, 0.5, 0.5]))
+    assert.equal(human.constitution, 55)
+    assert.equal(human.charisma, 55)
+    assert.equal(human.intelligence, 55)
+    const elf = createLife({
+      forename: 'Mira', surname: 'Hale', gender: 'female', race: 'Elf', socialClass: 'Peasant',
+    }, defaultConfig(), scripted([0, 0.5, 0]))
+    assert.equal(elf.constitution, 0)
+    assert.equal(elf.charisma, 70)
+    assert.equal(elf.intelligence, 0)
+    const dwarf = createLife({
+      forename: 'Mira', surname: 'Hale', gender: 'male', race: 'Dwarf', socialClass: 'Peasant',
+    }, defaultConfig(), scripted([0.5, 0, 0.5]))
+    assert.equal(dwarf.constitution, 70)
+    assert.equal(dwarf.charisma, 0)
+    assert.equal(dwarf.intelligence, 50)
   })
 
   it('introduces the family with the character surname and race forenames', () => {
@@ -375,7 +396,7 @@ describe('fantasylife engine', () => {
   it('forces the teenage milestone and resolves study by class', () => {
     const config = defaultConfig()
     const schooling = { ...born(), age: 15, school: 'Reading', tutorRelationship: 81 }
-    const milestone = ageUp(schooling, [], config, zero)
+    const milestone = ageUp(schooling, [teenageMilestone()], config, zero)
     assert.equal(milestone.age, 16)
     assert.equal(milestone.pendingEvent?.id, 'Milestone_event_2_teenage')
     assert.equal(milestone.log.at(-1)?.text, 'You reach the end of your basic education.')
@@ -393,7 +414,7 @@ describe('fantasylife engine', () => {
       age: 15,
       school: 'Letters',
       parentRelationship: 51,
-    }, [], config, zero)
+    }, [teenageMilestone()], config, zero)
     const covered = chooseOption(merchant, 'continue', config, zero)
     assert.equal(covered.merchantJobs, true)
     assert.equal(covered.school, 'Letters')
@@ -406,7 +427,7 @@ describe('fantasylife engine', () => {
       ...born({ socialClass: 'Noble', gender: 'female' }),
       age: 15,
       school: 'Rhetoric',
-    }, [], config, zero)
+    }, [teenageMilestone()], config, zero)
     const betrothed = chooseOption(noble, 'continue', config, zero)
     assert.equal(betrothed.school, null)
     assert.equal(betrothed.betrothed?.job, 'Knight')
@@ -416,6 +437,51 @@ describe('fantasylife engine', () => {
       betrothed.log.at(-1)?.text,
       'Your parents have betrothed you to Knight Aldric Harwick and expect you to focus on preparing to marry him, not an education.',
     )
+  })
+
+  it('forces the childhood milestone when aging to 6', () => {
+    const card = childhoodMilestone()
+    const life = ageUp({ ...born(), age: 5 }, [card, {
+      id: 'bell',
+      type: 'Anytime',
+      title: 'Bell',
+      description: 'A bell.',
+      options: [{ id: 'listen', text: 'Listen', success: { log: 'You listen.', effect: {} } }],
+    }], defaultConfig(), zero)
+    assert.equal(life.age, 6)
+    assert.equal(life.pendingEvent?.id, 'Milestone_event_1_childhood')
+    assert.equal(life.pendingEvent?.description, 'You are expected to take on responsibilities of your household.')
+  })
+
+  it('waits ten years before house fire can return', () => {
+    const fire = houseFireEvent()
+    let life = ageUp({ ...born(), age: 19 }, [fire], defaultConfig(), zero)
+    assert.equal(life.age, 20)
+    assert.equal(life.pendingEvent?.id, 'Anytime_event_001')
+    life = ageUp({ ...life, pendingEvent: null }, [fire], defaultConfig(), zero)
+    assert.equal(life.age, 21)
+    assert.equal(life.pendingEvent, null)
+    life = ageUp({ ...life, age: 29, pendingEvent: null }, [fire], defaultConfig(), zero)
+    assert.equal(life.age, 30)
+    assert.equal(life.pendingEvent?.id, 'Anytime_event_001')
+  })
+
+  it('stops an anytime event after five appearances', () => {
+    const bell: GameEventConfig = {
+      id: 'bell',
+      type: 'Anytime',
+      title: 'Bell',
+      description: 'A bell.',
+      options: [{ id: 'listen', text: 'Listen', success: { log: 'You listen.', effect: {} } }],
+    }
+    let life: Life = { ...born(), age: 20 }
+    for (let time = 0; time < 5; time += 1) {
+      life = ageUp({ ...life, pendingEvent: null }, [bell], defaultConfig(), zero)
+      assert.equal(life.pendingEvent?.id, 'bell')
+    }
+    life = ageUp({ ...life, pendingEvent: null }, [bell], defaultConfig(), zero)
+    assert.equal(life.pendingEvent, null)
+    assert.match(life.log.at(-1)?.text ?? '', /without a notable tale/)
   })
 
   it('keeps a score inside 0 to 100', () => {

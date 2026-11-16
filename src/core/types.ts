@@ -46,6 +46,8 @@ export interface GameEventConfig {
   maxAge?: number
   requiredRace?: Race[]
   requiredClass?: SocialClass[]
+  showLimit?: number
+  repeatAfter?: number
   options: EventOption[]
 }
 
@@ -181,6 +183,8 @@ export interface Life {
   pendingOutcome: OutcomeView | null
   pendingOffer: TeacherOffer | null
   usedThisYear: YearActivity[]
+  shownEvents: Record<string, number>
+  eventYears: Record<string, number>
 }
 
 export const RACES: Race[] = ['Elf', 'Human', 'Dwarf']

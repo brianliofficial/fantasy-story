@@ -14,7 +14,7 @@ import {
   VAGRANT_SALARY,
   VAGRANT_TITLE,
 } from './childhood'
-import { teenageMilestone, TEENAGE_ID } from './defaults'
+import { HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
 import { uid } from './id'
 import { cleanNamePart, pickDistinct, randomIdentity } from './names'
 import type {
@@ -41,8 +41,8 @@ import type {
 } from './types'
 import { CLASSES, MAX_AGE, RACES } from './types'
 
-const BASE = 0
 const NAMES = ['Rowan', 'Nora', 'Casey', 'Priya', 'Leo', 'Hana', 'Omar', 'Mia', 'Luca', 'Eden', 'Quinn', 'Soren']
+const ANYTIME_SHOW_LIMIT = 5
 
 export function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)))
@@ -96,6 +96,9 @@ export function createLife(
   const surname = cleanNamePart(input.surname) || 'Hale'
   const name = `${forename} ${surname}`
   const bonus = config.races[input.race]
+  const constitution = clampScore(randomInt(random, 0, 100) + bonus.constitution)
+  const charisma = clampScore(randomInt(random, 0, 100) + bonus.charisma)
+  const intelligence = clampScore(randomInt(random, 0, 100) + bonus.intelligence)
   const pool = config.names[input.race]
   const avoid = new Set<string>([forename.toLowerCase()])
   const motherForename = pickDistinct(pool.femaleForenames, random, avoid, 'Mira')
@@ -136,9 +139,9 @@ export function createLife(
     race: input.race,
     socialClass: input.socialClass,
     age: 0,
-    constitution: clampScore(BASE + bonus.constitution),
-    charisma: clampScore(BASE + bonus.charisma),
-    intelligence: clampScore(BASE + bonus.intelligence),
+    constitution,
+    charisma,
+    intelligence,
     gold: 0,
     parentRelationship: 72,
     people,
@@ -158,6 +161,62 @@ export function createLife(
     pendingOutcome: null,
     pendingOffer: null,
     usedThisYear: [],
+    shownEvents: {},
+    eventYears: {},
+  }
+}
+
+export function appearanceLimit(event: GameEventConfig): number | null {
+  if (event.type === 'Anytime') {
+    return Math.max(1, Math.min(ANYTIME_SHOW_LIMIT, Math.round(event.showLimit ?? ANYTIME_SHOW_LIMIT)))
+  }
+  if (event.type === 'Milestone') return Math.max(1, Math.round(event.showLimit ?? 1))
+  if (event.showLimit == null) return null
+  return Math.max(1, Math.round(event.showLimit))
+}
+
+function timesShown(life: Life, id: string): number {
+  return life.shownEvents?.[id] ?? 0
+}
+
+function withinLimit(life: Life, event: GameEventConfig): boolean {
+  const limit = appearanceLimit(event)
+  return limit == null || timesShown(life, event.id) < limit
+}
+
+function yearsBetween(event: GameEventConfig): number | null {
+  if (typeof event.repeatAfter === 'number' && Number.isFinite(event.repeatAfter)) {
+    return Math.max(0, Math.round(event.repeatAfter))
+  }
+  if (event.id === HOUSE_FIRE_ID) return 10
+  return null
+}
+
+function lastShownAge(life: Life, id: string): number | null {
+  const recorded = life.eventYears?.[id]
+  if (typeof recorded === 'number') return recorded
+  if (timesShown(life, id) > 0) return Math.max(0, life.age - 1)
+  return null
+}
+
+function cooledDown(life: Life, event: GameEventConfig): boolean {
+  const gap = yearsBetween(event)
+  if (gap == null || gap <= 0) return true
+  const last = lastShownAge(life, event.id)
+  if (last == null) return true
+  return life.age >= last + gap
+}
+
+function canOffer(life: Life, event: GameEventConfig): boolean {
+  return withinLimit(life, event) && cooledDown(life, event)
+}
+
+function present(life: Life, event: GameEventConfig): Life {
+  return {
+    ...life,
+    pendingEvent: event,
+    shownEvents: { ...life.shownEvents, [event.id]: timesShown(life, event.id) + 1 },
+    eventYears: { ...life.eventYears, [event.id]: life.age },
   }
 }
 
@@ -268,15 +327,15 @@ export function ageUp(
     if (loss > 0) next = applyEffect(next, { constitution: -loss })
   }
 
-  if (next.age === config.teenageAge) {
-    const milestone = events.find((event) => event.id === TEENAGE_ID) ?? teenageMilestone()
-    const logged = next.school
+  const milestone = events.find((event) => event.type === 'Milestone' && eventMatches(event, next) && canOffer(next, event))
+  if (milestone) {
+    const logged = milestone.id === TEENAGE_ID && next.school
       ? { ...next, log: [...next.log, entry(next.age, 'You reach the end of your basic education.')] }
       : next
-    return { ...logged, pendingEvent: milestone }
+    return present(logged, milestone)
   }
 
-  let eligible = events.filter((event) => event.id !== TEENAGE_ID && eventMatches(event, next))
+  let eligible = events.filter((event) => event.type !== 'Milestone' && eventMatches(event, next) && canOffer(next, event))
   if (menuOpen(config.classEvents, next.age)) {
     eligible = eligible.filter((event) => event.type === 'Anytime' || event.type === next.socialClass)
   }
@@ -287,7 +346,7 @@ export function ageUp(
     }
   }
   const event = eligible[randomInt(random, 0, eligible.length - 1)]
-  return event ? { ...next, pendingEvent: event } : next
+  return event ? present(next, event) : next
 }
 
 function statValue(life: Life, stat: CheckStat): number {
