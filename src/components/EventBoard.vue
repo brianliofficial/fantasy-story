@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { usePoolDrag } from '../composables/usePoolDrag'
 import { MAX_AGE, type GameEventConfig } from '../core/types'
 
@@ -19,7 +19,53 @@ const emit = defineEmits<{
 const boardRef = ref<HTMLElement | null>(null)
 const poolName = ref('')
 const poolError = ref('')
+const panning = ref(false)
 const { drag, begin } = usePoolDrag(boardRef, (id, pool, index) => emit('move', id, pool, index))
+let panPointer = -1
+let panOrigin = 0
+let panScroll = 0
+
+function canPan(target: EventTarget | null) {
+  return target instanceof Element
+    && !target.closest('button, a, input, textarea, select, label, .pool-card')
+}
+
+function startPan(event: PointerEvent) {
+  if (event.button !== 0 || !canPan(event.target)) return
+  const board = boardRef.value
+  if (!board) return
+  panPointer = event.pointerId
+  panOrigin = event.clientX
+  panScroll = board.scrollLeft
+  panning.value = true
+  window.addEventListener('pointermove', movePan)
+  window.addEventListener('pointerup', endPan)
+  window.addEventListener('pointercancel', endPan)
+  try { board.setPointerCapture(event.pointerId) } catch { /* the pointer can end before capture */ }
+}
+
+function movePan(event: PointerEvent) {
+  if (!panning.value || event.pointerId !== panPointer) return
+  const board = boardRef.value
+  if (!board) return
+  event.preventDefault()
+  board.scrollLeft = panScroll - (event.clientX - panOrigin)
+}
+
+function endPan(event: PointerEvent) {
+  if (event.pointerId !== panPointer) return
+  panning.value = false
+  panPointer = -1
+  window.removeEventListener('pointermove', movePan)
+  window.removeEventListener('pointerup', endPan)
+  window.removeEventListener('pointercancel', endPan)
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', movePan)
+  window.removeEventListener('pointerup', endPan)
+  window.removeEventListener('pointercancel', endPan)
+})
 
 const columns = computed(() => props.pools.map((pool) => ({
   pool,
@@ -64,7 +110,12 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
 </script>
 
 <template>
-  <div ref="boardRef" class="pool-board">
+  <div
+    ref="boardRef"
+    class="pool-board"
+    :class="{ 'is-panning': panning }"
+    @pointerdown="startPan"
+  >
     <section v-for="column in columns" :key="column.pool" class="pool-column" :data-pool="column.pool">
       <header class="pool-head">
         <h2>{{ column.pool }}</h2>

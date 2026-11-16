@@ -503,7 +503,13 @@ a { color: var(--blue); }
   overflow-x: auto;
   padding: 0 16px 16px;
   align-items: stretch;
+  cursor: grab;
 }
+
+.pool-board.is-panning { cursor: grabbing; user-select: none; }
+.pool-board input,
+.pool-board textarea,
+.pool-board select { cursor: text; }
 
 .pool-column {
   flex: 0 0 min(280px, 82vw);
@@ -525,6 +531,7 @@ a { color: var(--blue); }
   display: flex;
   gap: 8px;
   align-items: stretch;
+  cursor: default;
   background: #231b15;
   border: 1px solid var(--line);
   border-radius: 12px;
