@@ -18,7 +18,6 @@ const notice = ref<{ ok: boolean; text: string; label: string } | null>(null)
 const configured = supabaseConfigured()
 let noticeTimer = 0
 let uploadQueue = Promise.resolve()
-let draftTimer = 0
 
 watch(ledgerNotice, (value) => {
   if (!value) return
@@ -42,14 +41,6 @@ function add(pool: string) {
 
 function change(event: GameEventConfig) {
   editing.value = event
-  window.clearTimeout(draftTimer)
-  draftTimer = window.setTimeout(() => storeEvent(event), 400)
-}
-
-function storeEvent(event: GameEventConfig) {
-  if (eventError(event)) return
-  saveEvents(appendEvent(events.value, event))
-  upload(events.value, pools.value, event.title.trim() || 'Event')
 }
 
 function showNotice(ok: boolean, text: string, label = ok ? 'Saved' : 'Not saved') {
@@ -78,16 +69,16 @@ function upload(nextEvents: GameEventConfig[], nextPools: string[], title: strin
 }
 
 function save(event: GameEventConfig) {
-  window.clearTimeout(draftTimer)
   const message = eventError(event)
   if (message) {
     error.value = message
     editing.value = event
     return
   }
-  storeEvent(event)
+  saveEvents(appendEvent(events.value, event))
   editing.value = null
   error.value = ''
+  upload(events.value, pools.value, event.title.trim() || 'Event')
 }
 
 function remove(id: string) {
