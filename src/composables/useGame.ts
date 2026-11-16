@@ -1,5 +1,6 @@
 import { computed, inject, provide, ref, watch, type InjectionKey, type Ref } from 'vue'
-import { seedEvents, defaultConfig, withChildhood, withHouseFire, withTeenage } from '../core/defaults'
+import { seedEvents, defaultConfig } from '../core/defaults'
+import { chooseLedger, loadEventLedger, saveEventLedger, supabaseConfigured } from '../core/ledger'
 import {
   ageUp,
   answerTeacher,
@@ -86,29 +87,23 @@ export interface GameStore {
   saveEvents: (events: GameEventConfig[]) => void
   savePools: (pools: string[]) => void
   saveConfig: (config: GameConfig) => void
-  resetEvents: () => void
   resetConfig: () => void
   forgetLife: () => void
+  ledgerNotice: Ref<{ ok: boolean; text: string } | null>
 }
 
 const gameKey: InjectionKey<GameStore> = Symbol('fantasylife')
-
-function withClassPools(pools: string[]): string[] {
-  const next = [...pools]
-  for (const name of ['Journeyman', 'Merchant', 'Noble']) {
-    if (!next.some((pool) => pool.toLowerCase() === name.toLowerCase())) next.push(name)
-  }
-  return next
-}
 
 export function provideGame(): GameStore {
   const savedLife = sanitizeLife(read(LIFE_KEY))
   const savedEvents = sanitizeEvents(read(EVENTS_KEY))
   const life = ref<Life | null>(savedLife)
-  const events = ref<GameEventConfig[]>(withHouseFire(withTeenage(withChildhood(savedEvents ?? seedEvents()))))
-  const pools = ref<string[]>(withClassPools(sanitizePools(read(POOLS_KEY), events.value)))
+  const events = ref<GameEventConfig[]>(savedEvents ?? seedEvents())
+  const pools = ref<string[]>(sanitizePools(read(POOLS_KEY), events.value))
   const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
   const hasLife = computed(() => life.value !== null)
+  const ledgerNotice = ref<{ ok: boolean; text: string } | null>(null)
+  let edits = 0
 
   watch(life, (value) => {
     if (value) write(LIFE_KEY, value)
@@ -211,19 +206,18 @@ export function provideGame(): GameStore {
       if (!life.value) return
       update(buyHouse(life.value, config.value, tier))
     },
+    ledgerNotice,
     saveEvents(next) {
+      edits += 1
       events.value = next
-      pools.value = withClassPools(sanitizePools(pools.value, next))
+      pools.value = sanitizePools(pools.value, next)
     },
     savePools(next) {
-      pools.value = withClassPools(sanitizePools(next, events.value))
+      edits += 1
+      pools.value = sanitizePools(next, events.value)
     },
     saveConfig(next) {
       config.value = next
-    },
-    resetEvents() {
-      events.value = withTeenage(withChildhood(seedEvents()))
-      pools.value = defaultPools()
     },
     resetConfig() {
       config.value = defaultConfig()
@@ -234,7 +228,34 @@ export function provideGame(): GameStore {
   }
 
   provide(gameKey, store)
+  void alignLedger()
   return store
+
+  async function alignLedger() {
+    if (!supabaseConfigured()) return
+    const seen = edits
+    try {
+      const remote = await loadEventLedger()
+      if (edits !== seen) return
+      const choice = chooseLedger(savedEvents, pools.value, remote, seedEvents(), defaultPools())
+      if (edits !== seen) return
+      events.value = choice.events
+      pools.value = sanitizePools(choice.pools, choice.events)
+      const count = `${choice.events.length} event${choice.events.length === 1 ? '' : 's'} are set`
+      if (!choice.upload) {
+        ledgerNotice.value = { ok: true, text: `Event pool loaded. ${count}.` }
+        return
+      }
+      await saveEventLedger(choice.events, pools.value)
+      if (edits !== seen) return
+      ledgerNotice.value = { ok: true, text: `Event pool saved. ${count}.` }
+    } catch (caught) {
+      ledgerNotice.value = {
+        ok: false,
+        text: caught instanceof Error ? caught.message : 'Could not reach Supabase.',
+      }
+    }
+  }
 }
 
 export function useGame(): GameStore {

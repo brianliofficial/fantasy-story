@@ -1,4 +1,4 @@
-import { sanitizeEvents } from './sanitize'
+import { sanitizeEvent, sanitizeEvents } from './sanitize'
 import type { GameEventConfig } from './types'
 
 interface EventRow {
@@ -13,11 +13,53 @@ interface EventRow {
   required_class: GameEventConfig['requiredClass']
   options: GameEventConfig['options']
   position: number
+  repeat_after?: number | null
 }
 
 interface PoolRow {
   name: string
   position: number
+}
+
+export interface LedgerChoice {
+  events: GameEventConfig[]
+  pools: string[]
+  upload: boolean
+}
+
+export function chooseLedger(
+  localEvents: GameEventConfig[] | null,
+  localPools: string[],
+  remote: { events: GameEventConfig[]; pools: string[] } | null,
+  seed: GameEventConfig[],
+  seedPools: string[],
+): LedgerChoice {
+  const localIsDefault = !localEvents
+    || localEvents.length === 0
+    || (sameEvents(localEvents, seed) && sameList(localPools, seedPools))
+  if (remote && remote.events.length > 0) {
+    const remotePools = remote.pools.length > 0 ? remote.pools : localPools
+    if (localEvents && localEvents.length > 0 && !localIsDefault && !sameEvents(localEvents, remote.events)) {
+      return { events: localEvents, pools: localPools, upload: true }
+    }
+    return { events: remote.events, pools: remotePools, upload: false }
+  }
+  if (localEvents && localEvents.length > 0) {
+    return { events: localEvents, pools: localPools, upload: remote !== null }
+  }
+  return { events: seed, pools: seedPools, upload: remote !== null }
+}
+
+function sameEvents(left: GameEventConfig[], right: GameEventConfig[]): boolean {
+  return JSON.stringify(left.map(canonicalEvent)) === JSON.stringify(right.map(canonicalEvent))
+}
+
+function canonicalEvent(event: GameEventConfig): GameEventConfig | null {
+  return sanitizeEvent(event)
+}
+
+function sameList(left: string[], right: string[]): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 export function supabaseConfigured(): boolean {
@@ -34,16 +76,22 @@ export async function loadEventLedger(): Promise<{ events: GameEventConfig[]; po
   return { events, pools }
 }
 
-export async function saveEventLedger(events: GameEventConfig[], pools: string[]): Promise<void> {
-  const eventRows = events.map((event, position) => eventToRow(event, position))
-  const poolRows = pools.map((name, position) => ({ name, position }))
-  if (eventRows.length > 0) {
-    await rest('game_events?on_conflict=id', {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify(eventRows),
-    })
+let saveQueue = Promise.resolve()
+
+export function saveEventLedger(events: GameEventConfig[], pools: string[]): Promise<void> {
+  const run = saveQueue.then(() => writeLedger(events, pools))
+  saveQueue = run.then(() => undefined, () => undefined)
+  return run
+}
+
+async function writeLedger(events: GameEventConfig[], pools: string[]): Promise<void> {
+  try {
+    await writeEvents(events, true)
+  } catch (caught) {
+    if (!missingRepeatColumn(caught)) throw caught
+    await writeEvents(events, false)
   }
+  const poolRows = pools.map((name, position) => ({ name, position }))
   if (poolRows.length > 0) {
     await rest('event_pools?on_conflict=name', {
       method: 'POST',
@@ -55,8 +103,22 @@ export async function saveEventLedger(events: GameEventConfig[], pools: string[]
   await deleteMissing('event_pools', 'name', pools)
 }
 
-function eventToRow(event: GameEventConfig, position: number): EventRow {
-  return {
+async function writeEvents(events: GameEventConfig[], includeRepeat: boolean): Promise<void> {
+  if (events.length === 0) return
+  const eventRows = events.map((event, position) => eventToRow(event, position, includeRepeat))
+  await rest('game_events?on_conflict=id', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(eventRows),
+  })
+}
+
+function missingRepeatColumn(caught: unknown): boolean {
+  return caught instanceof Error && caught.message.includes('repeat_after')
+}
+
+function eventToRow(event: GameEventConfig, position: number, includeRepeat: boolean): EventRow {
+  const row: EventRow = {
     id: event.id,
     pool: event.type,
     title: event.title,
@@ -69,6 +131,8 @@ function eventToRow(event: GameEventConfig, position: number): EventRow {
     options: event.options,
     position,
   }
+  if (includeRepeat) row.repeat_after = event.repeatAfter ?? null
+  return row
 }
 
 function eventFromRow(row: EventRow): unknown {
@@ -83,6 +147,7 @@ function eventFromRow(row: EventRow): unknown {
     requiredRace: row.required_race,
     requiredClass: row.required_class,
     options: row.options,
+    repeatAfter: row.repeat_after ?? undefined,
   }
 }
 

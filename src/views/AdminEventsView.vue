@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import EventBoard from '../components/EventBoard.vue'
 import EventCardForm from '../components/EventCardForm.vue'
 import { useGame } from '../composables/useGame'
@@ -10,14 +10,21 @@ import { appendEvent, moveEvent } from '../core/pools'
 import type { GameEventConfig } from '../core/types'
 import { eventError } from '../core/validate'
 
-const { events, pools, saveEvents, savePools, resetEvents } = useGame()
+const { events, pools, saveEvents, savePools, ledgerNotice } = useGame()
 const editing = ref<GameEventConfig | null>(null)
 const error = ref('')
 const pendingDelete = ref('')
-const notice = ref<{ ok: boolean; text: string } | null>(null)
+const notice = ref<{ ok: boolean; text: string; label: string } | null>(null)
 const configured = supabaseConfigured()
 let noticeTimer = 0
 let uploadQueue = Promise.resolve()
+let draftTimer = 0
+
+watch(ledgerNotice, (value) => {
+  if (!value) return
+  const label = value.ok ? (value.text.startsWith('Event pool loaded') ? 'Loaded' : 'Saved') : 'Not saved'
+  showNotice(value.ok, value.text, label)
+}, { immediate: true })
 
 function open(id: string) {
   const event = events.value.find((item) => item.id === id)
@@ -35,10 +42,18 @@ function add(pool: string) {
 
 function change(event: GameEventConfig) {
   editing.value = event
+  window.clearTimeout(draftTimer)
+  draftTimer = window.setTimeout(() => storeEvent(event), 400)
 }
 
-function showNotice(ok: boolean, text: string) {
-  notice.value = { ok, text }
+function storeEvent(event: GameEventConfig) {
+  if (eventError(event)) return
+  saveEvents(appendEvent(events.value, event))
+  upload(events.value, pools.value, event.title.trim() || 'Event')
+}
+
+function showNotice(ok: boolean, text: string, label = ok ? 'Saved' : 'Not saved') {
+  notice.value = { ok, text, label }
   window.clearTimeout(noticeTimer)
   noticeTimer = window.setTimeout(() => {
     notice.value = null
@@ -62,18 +77,17 @@ function upload(nextEvents: GameEventConfig[], nextPools: string[], title: strin
   })
 }
 
-async function save(event: GameEventConfig) {
+function save(event: GameEventConfig) {
+  window.clearTimeout(draftTimer)
   const message = eventError(event)
   if (message) {
     error.value = message
     editing.value = event
     return
   }
-  const next = appendEvent(events.value, event)
-  saveEvents(next)
+  storeEvent(event)
   editing.value = null
   error.value = ''
-  upload(events.value, pools.value, event.title.trim() || 'Event')
 }
 
 function remove(id: string) {
@@ -111,12 +125,6 @@ function confirmRemovePool() {
   upload(events.value, pools.value, 'Pool')
 }
 
-function restore() {
-  resetEvents()
-  editing.value = null
-  error.value = ''
-  upload(events.value, pools.value, 'Defaults')
-}
 </script>
 
 <template>
@@ -129,11 +137,8 @@ function restore() {
       </nav>
     </header>
     <p class="pool-note">Each column is a pool. Drag empty space to move sideways. Drag a card by the handle, or open it to edit the full event.</p>
-    <div class="choice-row pool-toolbar">
-      <button type="button" class="btn" @click="restore">Restore defaults</button>
-    </div>
     <aside v-if="notice" class="save-notice" :class="{ 'is-error': !notice.ok }" role="status">
-      <strong>{{ notice.ok ? 'Saved' : 'Not saved' }}</strong>
+      <strong>{{ notice.label }}</strong>
       <p>{{ notice.text }}</p>
     </aside>
     <EventBoard
