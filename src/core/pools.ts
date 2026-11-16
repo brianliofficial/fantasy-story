@@ -5,6 +5,12 @@ export function defaultPools(): string[] {
   return [...DEFAULT_POOLS]
 }
 
+export function ledgerPools(poolNames: string[], events: GameEventConfig[]): string[] {
+  if (poolNames.length === 0 && events.length === 0) return []
+  const listed = poolNames.length > 0 ? poolNames : events.map((event) => event.type)
+  return sanitizePools(listed, events)
+}
+
 export function sanitizePools(value: unknown, events: GameEventConfig[]): string[] {
   const names: string[] = []
   const add = (name: string) => {

@@ -1,6 +1,6 @@
 import { computed, inject, provide, ref, watch, type InjectionKey, type Ref } from 'vue'
-import { seedEvents, defaultConfig } from '../core/defaults'
-import { chooseLedger, loadEventLedger, saveEventLedger, supabaseConfigured } from '../core/ledger'
+import { defaultConfig } from '../core/defaults'
+import { loadEventLedger, supabaseConfigured } from '../core/ledger'
 import {
   ageUp,
   answerTeacher,
@@ -24,8 +24,8 @@ import {
   workWithParent,
   yearActivity,
 } from '../core/engine'
-import { sanitizeConfig, sanitizeEvents, sanitizeLife } from '../core/sanitize'
-import { sanitizePools, defaultPools } from '../core/pools'
+import { sanitizeConfig, sanitizeLife } from '../core/sanitize'
+import { ledgerPools } from '../core/pools'
 import type {
   ChildhoodAction,
   GameConfig,
@@ -40,9 +40,8 @@ import type {
 } from '../core/types'
 
 const LIFE_KEY = 'fantasylife.life'
-const EVENTS_KEY = 'fantasylife.events'
 const CONFIG_KEY = 'fantasylife.config'
-const POOLS_KEY = 'fantasylife.pools'
+const RETIRED_EVENT_KEYS = ['fantasylife.events', 'fantasylife.pools']
 
 function read(key: string): unknown {
   try {
@@ -95,11 +94,11 @@ export interface GameStore {
 const gameKey: InjectionKey<GameStore> = Symbol('fantasylife')
 
 export function provideGame(): GameStore {
+  for (const key of RETIRED_EVENT_KEYS) localStorage.removeItem(key)
   const savedLife = sanitizeLife(read(LIFE_KEY))
-  const savedEvents = sanitizeEvents(read(EVENTS_KEY))
   const life = ref<Life | null>(savedLife)
-  const events = ref<GameEventConfig[]>(savedEvents ?? seedEvents())
-  const pools = ref<string[]>(sanitizePools(read(POOLS_KEY), events.value))
+  const events = ref<GameEventConfig[]>([])
+  const pools = ref<string[]>([])
   const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
   const hasLife = computed(() => life.value !== null)
   const ledgerNotice = ref<{ ok: boolean; text: string } | null>(null)
@@ -109,8 +108,6 @@ export function provideGame(): GameStore {
     if (value) write(LIFE_KEY, value)
     else localStorage.removeItem(LIFE_KEY)
   }, { deep: true })
-  watch(events, (value) => write(EVENTS_KEY, value), { deep: true })
-  watch(pools, (value) => write(POOLS_KEY, value), { deep: true })
   watch(config, (value) => write(CONFIG_KEY, value), { deep: true })
 
   const update = (next: Life) => {
@@ -210,11 +207,11 @@ export function provideGame(): GameStore {
     saveEvents(next) {
       edits += 1
       events.value = next
-      pools.value = sanitizePools(pools.value, next)
+      pools.value = ledgerPools(pools.value, next)
     },
     savePools(next) {
       edits += 1
-      pools.value = sanitizePools(next, events.value)
+      pools.value = ledgerPools(next, events.value)
     },
     saveConfig(next) {
       config.value = next
@@ -232,23 +229,18 @@ export function provideGame(): GameStore {
   return store
 
   async function alignLedger() {
-    if (!supabaseConfigured()) return
+    if (!supabaseConfigured()) {
+      ledgerNotice.value = { ok: false, text: 'Supabase is not configured.' }
+      return
+    }
     const seen = edits
     try {
       const remote = await loadEventLedger()
       if (edits !== seen) return
-      const choice = chooseLedger(savedEvents, pools.value, remote, seedEvents(), defaultPools())
-      if (edits !== seen) return
-      events.value = choice.events
-      pools.value = sanitizePools(choice.pools, choice.events)
-      const count = `${choice.events.length} event${choice.events.length === 1 ? '' : 's'} are set`
-      if (!choice.upload) {
-        ledgerNotice.value = { ok: true, text: `Event pool loaded. ${count}.` }
-        return
-      }
-      await saveEventLedger(choice.events, pools.value)
-      if (edits !== seen) return
-      ledgerNotice.value = { ok: true, text: `Event pool saved. ${count}.` }
+      events.value = remote.events
+      pools.value = ledgerPools(remote.pools, remote.events)
+      const count = `${remote.events.length} event${remote.events.length === 1 ? '' : 's'} are set`
+      ledgerNotice.value = { ok: true, text: `Event pool loaded. ${count}.` }
     } catch (caught) {
       ledgerNotice.value = {
         ok: false,

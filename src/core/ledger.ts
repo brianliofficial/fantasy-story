@@ -1,4 +1,4 @@
-import { sanitizeEvent, sanitizeEvents } from './sanitize'
+import { sanitizeEvents } from './sanitize'
 import type { GameEventConfig } from './types'
 
 interface EventRow {
@@ -19,47 +19,6 @@ interface EventRow {
 interface PoolRow {
   name: string
   position: number
-}
-
-export interface LedgerChoice {
-  events: GameEventConfig[]
-  pools: string[]
-  upload: boolean
-}
-
-export function chooseLedger(
-  localEvents: GameEventConfig[] | null,
-  localPools: string[],
-  remote: { events: GameEventConfig[]; pools: string[] } | null,
-  seed: GameEventConfig[],
-  seedPools: string[],
-): LedgerChoice {
-  const localIsDefault = !localEvents
-    || localEvents.length === 0
-    || (sameEvents(localEvents, seed) && sameList(localPools, seedPools))
-  if (remote && remote.events.length > 0) {
-    const remotePools = remote.pools.length > 0 ? remote.pools : localPools
-    if (localEvents && localEvents.length > 0 && !localIsDefault && !sameEvents(localEvents, remote.events)) {
-      return { events: localEvents, pools: localPools, upload: true }
-    }
-    return { events: remote.events, pools: remotePools, upload: false }
-  }
-  if (localEvents && localEvents.length > 0) {
-    return { events: localEvents, pools: localPools, upload: remote !== null }
-  }
-  return { events: seed, pools: seedPools, upload: remote !== null }
-}
-
-function sameEvents(left: GameEventConfig[], right: GameEventConfig[]): boolean {
-  return JSON.stringify(left.map(canonicalEvent)) === JSON.stringify(right.map(canonicalEvent))
-}
-
-function canonicalEvent(event: GameEventConfig): GameEventConfig | null {
-  return sanitizeEvent(event)
-}
-
-function sameList(left: string[], right: string[]): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 export function supabaseConfigured(): boolean {
