@@ -451,6 +451,21 @@ describe('fantasylife engine', () => {
     assert.equal(life.age, 6)
     assert.equal(life.pendingEvent?.id, 'Milestone_event_1_childhood')
     assert.equal(life.pendingEvent?.description, 'You are expected to take on responsibilities of your household.')
+    assert.equal(life.pendingEvent?.minAge, 6)
+    assert.equal(life.pendingEvent?.maxAge, 6)
+    const texts = life.pendingEvent?.options.map((option) => option.text) ?? []
+    assert.deepEqual(texts, [
+      'Go to work with your mother as a Farmer',
+      'Go to work with your father as a Farmer',
+      'Seek a teacher who will teach you for free',
+      'Run away from this ragged lifestyle',
+    ])
+    const mother = life.pendingEvent?.options[0]
+    assert.ok(mother)
+    const working = chooseOption(life, mother.id, defaultConfig(), zero)
+    assert.equal(working.pendingEvent, null)
+    assert.equal(working.occupation?.title, 'Farmer')
+    assert.equal(working.duty, 'done')
   })
 
   it('waits ten years before house fire can return', () => {

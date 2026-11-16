@@ -1,5 +1,5 @@
 import { computed, inject, provide, ref, watch, type InjectionKey, type Ref } from 'vue'
-import { defaultConfig } from '../core/defaults'
+import { CHILDHOOD_ID, childhoodMilestone, defaultConfig } from '../core/defaults'
 import { loadEventLedger, supabaseConfigured } from '../core/ledger'
 import {
   ageUp,
@@ -16,6 +16,7 @@ import {
   infantAction,
   interact,
   openHousehold,
+  showChildhoodMilestone,
   quitSchool,
   runAway,
   seekTeacher,
@@ -71,6 +72,7 @@ export interface GameStore {
   infant: (action: InfantAction) => void
   childhood: (action: ChildhoodAction) => void
   household: () => void
+  showHousehold: () => void
   work: (parentId: string) => void
   teacher: () => void
   answer: (accept: boolean) => void
@@ -154,6 +156,11 @@ export function provideGame(): GameStore {
     household() {
       if (!life.value) return
       update(openHousehold(life.value, Math.random, config.value))
+    },
+    showHousehold() {
+      if (!life.value) return
+      const card = events.value.find((event) => event.id === CHILDHOOD_ID) ?? childhoodMilestone()
+      update(showChildhoodMilestone(life.value, card))
     },
     work(parentId) {
       if (!life.value) return

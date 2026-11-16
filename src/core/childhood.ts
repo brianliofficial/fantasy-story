@@ -1,4 +1,4 @@
-import type { Life, SocialClass, TeacherOffer } from './types'
+import type { EventOption, Life, SocialClass, TeacherOffer } from './types'
 
 export interface Trade {
   parent: string
@@ -109,6 +109,24 @@ export function offerSentence(offer: TeacherOffer): string {
   const job = offer.job.toLowerCase()
   const lead = article(race) === 'an' ? 'An' : 'A'
   return `${lead} ${race} ${job} named ${offer.forename} ${offer.surname} agrees to teach you ${offer.subject}. Do you accept?`
+}
+
+function choice(id: string, text: string): EventOption {
+  return { id, text, success: { log: text, effect: {} } }
+}
+
+export function householdEventOptions(life: Life): EventOption[] {
+  if (life.socialClass === 'Peasant' || life.socialClass === 'Journeyman') {
+    return [
+      ...laborChoices(life).map((item) => choice(`work:${item.id}`, item.text)),
+      choice('teacher', 'Seek a teacher who will teach you for free'),
+      choice('runaway', 'Run away from this ragged lifestyle'),
+    ]
+  }
+  if (life.socialClass === 'Merchant') {
+    return MERCHANT_SCHOOLS.map((course) => choice(`school:${course.subject}`, `${course.subject} — ${course.price} gold`))
+  }
+  return NOBLE_SUBJECTS.map((subject) => choice(`school:${subject}`, subject))
 }
 
 export function laborChoices(life: Life): { id: string; text: string }[] {
