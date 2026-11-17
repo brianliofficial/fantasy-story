@@ -22,7 +22,7 @@ const statLabel = computed(() => {
       <div v-if="outcome.roll" class="roll">
         <span>Roll</span>
         <strong>{{ outcome.roll.die }}</strong>
-        <span v-if="outcome.roll.statValue !== 0">+ {{ statLabel }} {{ outcome.roll.statValue }}</span>
+        <span v-if="statLabel">+ {{ statLabel }} {{ outcome.roll.statValue }}</span>
         <span>Total {{ outcome.roll.total }}</span>
       </div>
       <p>{{ outcome.log }}</p>

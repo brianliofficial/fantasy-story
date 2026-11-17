@@ -266,7 +266,7 @@ function sanitizeOffer(value: unknown): TeacherOffer | null {
     subject,
     ...(value.gender === 'male' || value.gender === 'female' ? { gender: value.gender } : {}),
     roll: {
-      die: Math.max(1, Math.min(100, numberOr(value.roll.die, 1))),
+      die: Math.max(0, Math.min(100, numberOr(value.roll.die, 0))),
       stat: value.roll.stat,
       statValue: numberOr(value.roll.statValue, 0),
       total: numberOr(value.roll.total, 0),
@@ -305,7 +305,7 @@ export function sanitizeLife(value: unknown): Life | null {
     }
     if (isRecord(value.pendingOutcome.roll) && isCheckStat(value.pendingOutcome.roll.stat)) {
       pendingOutcome.roll = {
-        die: Math.max(1, Math.min(100, numberOr(value.pendingOutcome.roll.die, 1))),
+        die: Math.max(0, Math.min(100, numberOr(value.pendingOutcome.roll.die, 0))),
         stat: value.pendingOutcome.roll.stat,
         statValue: numberOr(value.pendingOutcome.roll.statValue, 0),
         total: numberOr(value.pendingOutcome.roll.total, 0),
