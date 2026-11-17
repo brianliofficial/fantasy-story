@@ -99,3 +99,36 @@ function begin() {
     </form>
   </main>
 </template>
+
+<style lang="scss" scoped>
+.home {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.home-card {
+  width: min(100%, 440px);
+  background: linear-gradient(165deg, #251d16 0%, #1a140f 55%, #16100c 100%);
+  border: 1.5px solid #8c6b32;
+  border-radius: 24px;
+  padding: 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow:
+    0 25px 60px -12px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 4px #17120e,
+    inset 0 0 0 5px rgba(201, 162, 82, 0.28);
+
+  h1 {
+    margin: 0;
+    font-family: "Cinzel Decorative", Cinzel, serif;
+    font-size: clamp(2rem, 8vw, 2.6rem);
+    color: #f5e7c6;
+  }
+}
+
+.name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+</style>

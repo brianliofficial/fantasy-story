@@ -7,6 +7,7 @@ import { cloneData } from '../core/clone'
 import { blankEvent } from '../core/defaults'
 import { saveEventLedger, supabaseConfigured } from '../core/ledger'
 import { appendEvent, moveEvent } from '../core/pools'
+import { eventPoolWorkbook, readEventPoolWorkbook } from '../core/spreadsheet'
 import type { GameEventConfig } from '../core/types'
 import { eventError } from '../core/validate'
 
@@ -14,6 +15,8 @@ const { events, pools, saveEvents, savePools, ledgerNotice, refreshLedger, ledge
 const editing = ref<GameEventConfig | null>(null)
 const error = ref('')
 const pendingDelete = ref('')
+const incoming = ref<{ events: GameEventConfig[]; pools: string[] } | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 const notice = ref<{ ok: boolean; text: string; label: string } | null>(null)
 const configured = supabaseConfigured()
 let noticeTimer = 0
@@ -139,6 +142,45 @@ function removePool(pool: string) {
   upload(events.value, pools.value, 'Pool')
 }
 
+function exportExcel() {
+  const bytes = eventPoolWorkbook(events.value, pools.value)
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'fantasy-life-event-pool.xlsx'
+  link.click()
+  URL.revokeObjectURL(url)
+  const count = `${events.value.length} event${events.value.length === 1 ? '' : 's'}`
+  showNotice(true, `Exported ${count}.`, 'Exported')
+}
+
+async function stageImport(event: Event) {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement)) return
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    incoming.value = readEventPoolWorkbook(await file.arrayBuffer())
+  } catch (caught) {
+    incoming.value = null
+    showNotice(false, caught instanceof Error ? caught.message : 'That Excel file could not be read.')
+  }
+}
+
+function confirmImport() {
+  const next = incoming.value
+  if (!next) return
+  saveEvents(next.events)
+  savePools(next.pools)
+  incoming.value = null
+  if (editing.value) editing.value = null
+  upload(events.value, pools.value, 'Event pool')
+}
+
 function confirmRemovePool() {
   const pool = pendingDelete.value
   saveEvents(events.value.filter((event) => event.type !== pool))
@@ -155,6 +197,9 @@ function confirmRemovePool() {
     <header class="admin-head">
       <h1>Event pool</h1>
       <nav class="admin-links">
+        <button type="button" class="text-link" @click="exportExcel">Export Excel</button>
+        <button type="button" class="text-link" @click="fileInput?.click()">Import Excel</button>
+        <input ref="fileInput" class="sr-only" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="stageImport" />
         <RouterLink to="/admin/config">Config</RouterLink>
         <RouterLink to="/">Game</RouterLink>
       </nav>
@@ -180,6 +225,16 @@ function confirmRemovePool() {
         <button type="button" class="btn" @click="editing = null">Close</button>
       </div>
     </div>
+    <div v-if="incoming" class="modal-backdrop" @click.self="incoming = null">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="import-pool-title">
+        <h2 id="import-pool-title">Replace the event pool?</h2>
+        <p>This file has {{ incoming.events.length }} event{{ incoming.events.length === 1 ? '' : 's' }}. Importing it overwrites the current pool and saves it to Supabase.</p>
+        <div class="choice-row">
+          <button type="button" class="btn" @click="incoming = null">Cancel</button>
+          <button type="button" class="btn btn-primary" @click="confirmImport">Import</button>
+        </div>
+      </section>
+    </div>
     <div v-if="pendingDelete" class="modal-backdrop" @click.self="pendingDelete = ''">
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-pool-title">
         <h2 id="delete-pool-title">Delete {{ pendingDelete }}?</h2>
@@ -192,3 +247,41 @@ function confirmRemovePool() {
     </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.pool-page {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+
+.pool-note { margin: 10px 16px; }
+
+.save-notice {
+  position: fixed;
+  z-index: 40;
+  top: 88px;
+  left: 16px;
+  width: min(280px, calc(100vw - 32px));
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #231b15;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+
+  strong { display: block; margin-bottom: 4px; color: #e8c77b; }
+  p { margin: 0; color: var(--ink); }
+
+  &.is-error strong { color: #e7b2b2; }
+}
+
+.editor-modal {
+  width: min(100%, 640px);
+
+  :deep(.event-card) { border: 0; padding: 0; box-shadow: none; }
+}
+</style>

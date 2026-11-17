@@ -305,3 +305,96 @@ const poolBand = computed(() => agePoolFor(props.event.type))
     </div>
   </article>
 </template>
+
+<style lang="scss" scoped>
+.event-card {
+  background: var(--card);
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  h2 { margin: 0; font-size: 1.05rem; }
+}
+
+.tab-set { display: flex; flex-direction: column; }
+
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 -1px;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px 8px 16px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &.is-selected {
+    background: #1b1511;
+    color: var(--ink);
+    border-color: var(--line);
+  }
+}
+
+.option-card .tab.is-selected { background: #15100c; }
+
+.tab-x {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+
+  &:hover { color: #e8c77b; }
+}
+
+.tab-plus {
+  width: 40px;
+  min-height: 40px;
+  margin: 0 0 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: #e8c77b;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+}
+
+.tab-panel {
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+}
+
+.log-panel {
+  background: #15100c;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.effect-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+</style>

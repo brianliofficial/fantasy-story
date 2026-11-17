@@ -56,3 +56,41 @@ const adult = computed(() => {
     </template>
   </nav>
 </template>
+
+<style lang="scss" scoped>
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(100%, 480px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 8px 8px calc(8px + var(--safe-bottom));
+  background: #16100c;
+  border-top: 1px solid var(--line);
+
+  a {
+    flex: 1 1 68px;
+    max-width: 120px;
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    border-radius: 12px;
+
+    &.router-link-active { color: var(--blue); }
+  }
+
+  .mark { font-size: 1.1rem; }
+}
+</style>

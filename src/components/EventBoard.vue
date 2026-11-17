@@ -175,3 +175,126 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
     </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.pool-board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 0 16px 16px;
+  align-items: stretch;
+  cursor: grab;
+
+  &.is-panning { cursor: grabbing; user-select: none; }
+
+  input, textarea, select { cursor: text; }
+}
+
+.pool-column {
+  flex: 0 0 min(280px, 82vw);
+  background: #1b1511;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 100%;
+}
+
+.pool-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+
+  h2 { margin: 0; font-size: 1rem; }
+}
+
+.pool-tag { margin: 2px 0 0; color: #c9a252; font-size: 0.75rem; }
+
+.pool-cards {
+  flex: 1;
+  min-height: 48px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pool-card {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  cursor: default;
+  background: #231b15;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+
+  &.is-hidden { display: none; }
+}
+
+.grip {
+  width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: #130e0b;
+  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: -1px;
+  touch-action: none;
+}
+
+.pool-card-body {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0;
+
+  span { color: var(--muted); font-size: 0.85rem; }
+}
+
+.drop-line { height: 4px; border-radius: 999px; background: var(--blue); }
+
+.text-btn {
+  border: 0;
+  background: transparent;
+  min-height: 44px;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.pool-create {
+  background: #231b15;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+
+  h2 { margin: 0; font-size: 1rem; }
+}
+
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: #231b15;
+  color: var(--ink);
+  border: 1px solid var(--gold);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  font-weight: 700;
+  pointer-events: none;
+}
+</style>

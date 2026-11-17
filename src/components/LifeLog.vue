@@ -22,3 +22,22 @@ watch(() => props.entries.at(-1)?.id ?? '', async () => {
     </article>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.log-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+
+  &::-webkit-scrollbar { width: 5px; }
+  &::-webkit-scrollbar-thumb { background: #6e5326; border-radius: 999px; }
+}
+
+.log-entry {
+  margin: 0 0 14px;
+
+  strong { display: block; color: var(--blue-dark); font-size: 0.92rem; }
+  p { margin: 2px 0 0; }
+}
+</style>

@@ -57,3 +57,88 @@ function closeDeath() {
     <DeathModal v-else-if="!life.alive" :life="life" @home="closeDeath" />
   </div>
 </template>
+
+<style lang="scss" scoped>
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, rgba(122, 93, 41, 0.28), rgba(201, 162, 82, 0.22), rgba(122, 93, 41, 0.28));
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+
+  h1, p { margin: 0; }
+  h1 { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  p { color: var(--muted); font-size: 0.95rem; }
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #241b14;
+  color: #e8c77b;
+  border: 1px solid var(--gold);
+  font-weight: 800;
+  flex: none;
+}
+
+.gold {
+  color: #e8c77b;
+  font-weight: 700;
+  text-align: right;
+  font-family: Cinzel, Georgia, serif;
+
+  span { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+}
+
+.log-pane {
+  height: 50vh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #15100c;
+  border-bottom: 1px solid var(--line);
+}
+
+.play-log :deep(.log-scroll) { padding-bottom: 58px; }
+
+.age-seam {
+  position: relative;
+  z-index: 3;
+  height: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.age-orb {
+  width: 86px;
+  height: 86px;
+  margin-top: -43px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 4px solid #c9a252;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #2f7d4e, #18472c 72%);
+  color: #f2e6d0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.05;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+
+  span { display: block; text-align: center; }
+}
+</style>

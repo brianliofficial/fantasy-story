@@ -53,3 +53,21 @@ function owned(tier: SocialClass): boolean {
     <BottomDock />
   </div>
 </template>
+
+<style lang="scss" scoped>
+.house-row {
+  appearance: none;
+  border: 0;
+  background: #241c16;
+  color: #8d8274;
+
+  &:not(:disabled) {
+    background: #c9a252;
+    color: #fff;
+
+    small { color: #fff; }
+  }
+
+  &:disabled { opacity: 1; }
+}
+</style>

@@ -57,3 +57,7 @@ function roleLabel(role: RelationRole): string {
     <BottomDock />
   </div>
 </template>
+
+<style lang="scss" scoped>
+.relation-track { width: 72px; }
+</style>

@@ -118,3 +118,17 @@ function restore() {
     </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+
+@media (min-width: 900px) {
+  .admin-grid { grid-template-columns: 1fr 1fr; }
+  .names-span { grid-column: 1 / -1; }
+}
+</style>
