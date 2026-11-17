@@ -15,6 +15,7 @@ import {
   VAGRANT_SALARY,
   VAGRANT_TITLE,
 } from './childhood'
+import { agePoolFor } from './age'
 import { CHILDHOOD_ID, HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
 import { uid } from './id'
 import { cleanNamePart, pickDistinct, randomIdentity } from './names'
@@ -260,6 +261,13 @@ export function eventMatches(event: GameEventConfig, life: Life): boolean {
   return event.options.length > 0
 }
 
+function poolOpen(type: string, age: number, config: GameConfig, socialClass: SocialClass): boolean {
+  const band = agePoolFor(type)
+  if (band) return age >= band.minAge && age <= band.maxAge
+  if (menuOpen(config.classEvents, age)) return type === 'Anytime' || type === socialClass
+  return true
+}
+
 function agePeople(life: Life, years: number): Person[] {
   return life.people.map((person) => {
     if (!person.alive) return { ...person, diedYearsAgo: (person.diedYearsAgo ?? 0) + years }
@@ -340,10 +348,12 @@ export function ageUp(
     return present(logged, milestone)
   }
 
-  let eligible = events.filter((event) => event.type !== 'Milestone' && eventMatches(event, next) && canOffer(next, event))
-  if (menuOpen(config.classEvents, next.age)) {
-    eligible = eligible.filter((event) => event.type === 'Anytime' || event.type === next.socialClass)
-  }
+  let eligible = events.filter((event) => (
+    event.type !== 'Milestone'
+    && eventMatches(event, next)
+    && canOffer(next, event)
+    && poolOpen(event.type, next.age, config, next.socialClass)
+  ))
   if (eligible.length === 0) {
     return {
       ...next,
@@ -370,9 +380,17 @@ export function chooseOption(
   const option = life.pendingEvent.options.find((item) => item.id === optionId)
   if (!option) return life
   const housePrice = config ? Math.max(0, config.housing[life.socialClass]) : 0
-  const passed = option.checkHouse
-    ? Boolean(config) && life.gold >= housePrice
-    : !option.checkStat || statValue(life, option.checkStat) >= (option.threshold ?? 50)
+  let passed = true
+  let roll: OutcomeView['roll']
+  if (option.checkHouse) {
+    passed = Boolean(config) && life.gold >= housePrice
+  } else if (option.checkStat) {
+    const die = randomInt(random, 0, 100)
+    const value = statValue(life, option.checkStat)
+    const total = die + value
+    passed = total >= (option.threshold ?? 50)
+    roll = { die, stat: option.checkStat, statValue: value, total }
+  }
   const outcome = passed || !option.failure ? option.success : option.failure
   if (!outcome) return life
   let next = applyEffect(life, outcome.effect)
@@ -388,6 +406,7 @@ export function chooseOption(
       title: passed ? life.pendingEvent.title : 'It goes badly',
       log: outcome.log,
       passed,
+      roll,
     },
     log: [...next.log, entry(life.age, outcome.log)],
   }

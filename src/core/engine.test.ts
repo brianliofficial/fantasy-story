@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { ageTagFor } from './age'
 import { childhoodMilestone, defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
 import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
 import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
@@ -91,18 +92,20 @@ describe('fantasylife engine', () => {
     assert.ok(market)
     let life = born()
     life = { ...life, age: 20, charisma: 40, gold: 5, pendingEvent: market }
-    life = chooseOption(life, 'haggle')
+    life = chooseOption(life, 'haggle', undefined, zero)
     assert.equal(life.pendingOutcome?.passed, false)
+    assert.deepEqual(life.pendingOutcome?.roll, { die: 0, stat: 'charisma', statValue: 40, total: 40 })
     assert.equal(life.gold, 0)
     assert.equal(life.charisma, 36)
   })
 
-  it('passes the check when the stat is high enough', () => {
+  it('passes the check when the roll plus the stat reaches the threshold', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     let life = born({ socialClass: 'Merchant' })
-    life = { ...life, age: 20, charisma: 50, pendingEvent: market }
-    life = chooseOption(life, 'haggle')
+    life = { ...life, age: 20, charisma: 40, pendingEvent: market }
+    life = chooseOption(life, 'haggle', undefined, () => 0.2)
     assert.equal(life.pendingOutcome?.passed, true)
+    assert.deepEqual(life.pendingOutcome?.roll, { die: 20, stat: 'charisma', statValue: 40, total: 60 })
     assert.equal(life.gold, 35)
   })
 
@@ -358,6 +361,44 @@ describe('fantasylife engine', () => {
     const studied = studyHard(schooling, scripted([0.75]))
     assert.equal(studied.intelligence, 10)
     assert.equal(studied.pendingOutcome?.log, 'You study hard and the lesson stays with you.')
+  })
+
+  it('tags a life by age and offers the matching pool', () => {
+    assert.equal(ageTagFor(0)?.tag, 'Infants')
+    assert.equal(ageTagFor(5)?.pool, 'Infant')
+    assert.equal(ageTagFor(6)?.tag, 'Child')
+    assert.equal(ageTagFor(12)?.pool, 'Child')
+    assert.equal(ageTagFor(13)?.tag, 'Teenager')
+    assert.equal(ageTagFor(18)?.pool, 'Teenager')
+    assert.equal(ageTagFor(19)?.tag, 'Adult')
+    assert.equal(ageTagFor(100)?.pool, 'Adult')
+    assert.equal(ageTagFor(101), null)
+
+    const tale = (id: string, type: string): GameEventConfig => ({
+      id,
+      type,
+      title: id,
+      description: 'A year passes.',
+      minAge: 0,
+      maxAge: 80,
+      options: [{ id: 'go', text: 'Go on', success: { log: 'The year goes on.', effect: {} } }],
+    })
+    const config = defaultConfig()
+    const infantYear = ageUp({ ...born(), age: 4 }, [tale('toy', 'Child'), tale('cry', 'Infant')], config, zero)
+    assert.equal(infantYear.age, 5)
+    assert.equal(infantYear.pendingEvent?.id, 'cry')
+
+    const childYear = ageUp({ ...born(), age: 7 }, [tale('glade', 'Elf'), tale('toy', 'Child')], config, zero)
+    assert.equal(childYear.age, 8)
+    assert.equal(childYear.pendingEvent?.id, 'toy')
+
+    const teenYear = ageUp({ ...born(), age: 12 }, [tale('toy', 'Child'), tale('fair', 'Teenager')], config, zero)
+    assert.equal(teenYear.age, 13)
+    assert.equal(teenYear.pendingEvent?.id, 'fair')
+
+    const adultYear = ageUp({ ...born(), age: 18 }, [tale('fair', 'Teenager'), tale('tax', 'Adult')], config, zero)
+    assert.equal(adultYear.age, 19)
+    assert.equal(adultYear.pendingEvent?.id, 'tax')
   })
 
   it('draws anytime and the matching class pool from ages 7 to 13', () => {

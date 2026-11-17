@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { agePoolFor } from '../core/age'
 import { uid } from '../core/id'
 import { cloneData } from '../core/clone'
 import type { CheckStat, EventOption, GameEventConfig, Race, SocialClass, StatChange } from '../core/types'
@@ -175,6 +176,7 @@ function setCheck(optionId: string, value: string) {
 const poolOptions = computed(() => (
   props.pools.includes(props.event.type) ? props.pools : [props.event.type, ...props.pools]
 ))
+const poolBand = computed(() => agePoolFor(props.event.type))
 </script>
 
 <template>
@@ -192,6 +194,7 @@ const poolOptions = computed(() => (
           <option v-for="pool in poolOptions" :key="pool" :value="pool">{{ pool }}</option>
         </select>
       </label>
+      <p v-if="poolBand" class="hint">This pool matches the {{ poolBand.tag }} tag, ages {{ poolBand.minAge }}–{{ poolBand.maxAge }}.</p>
     </header>
     <section>
       <h2>Trigger rules</h2>

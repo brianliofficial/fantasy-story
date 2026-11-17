@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { usePoolDrag } from '../composables/usePoolDrag'
+import { agePoolFor, ageTagLabel } from '../core/age'
 import { MAX_AGE, type GameEventConfig } from '../core/types'
 
 const props = defineProps<{
@@ -69,6 +70,7 @@ onBeforeUnmount(() => {
 
 const columns = computed(() => props.pools.map((pool) => ({
   pool,
+  tag: agePoolFor(pool),
   events: props.events.filter((event) => event.type === pool),
 })))
 
@@ -118,7 +120,10 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
   >
     <section v-for="column in columns" :key="column.pool" class="pool-column" :data-pool="column.pool">
       <header class="pool-head">
-        <h2>{{ column.pool }}</h2>
+        <div>
+          <h2>{{ column.pool }}</h2>
+          <p v-if="column.tag" class="pool-tag">{{ ageTagLabel(column.tag) }}</p>
+        </div>
         <button type="button" class="text-btn" @click="emit('removePool', column.pool)">Delete</button>
       </header>
       <div class="pool-cards">

@@ -159,7 +159,7 @@ function confirmRemovePool() {
         <RouterLink to="/">Game</RouterLink>
       </nav>
     </header>
-    <p class="pool-note">Each column is a pool. Drag empty space to move sideways. Drag a card by the handle, or open it to edit the full event.</p>
+    <p class="pool-note">Each column is a pool. Infant is the Infants tag, ages 0–5. Child is ages 6–12. Teenager is ages 13–18. Adult is ages 19–100. Drag empty space to move sideways. Drag a card by the handle, or open it to edit the full event.</p>
     <aside v-if="notice" class="save-notice" :class="{ 'is-error': !notice.ok }" role="status">
       <strong>{{ notice.label }}</strong>
       <p>{{ notice.text }}</p>

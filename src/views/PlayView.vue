@@ -8,16 +8,19 @@ import LifeLog from '../components/LifeLog.vue'
 import OfferModal from '../components/OfferModal.vue'
 import OutcomeModal from '../components/OutcomeModal.vue'
 import StatList from '../components/StatList.vue'
+import { ageTagFor } from '../core/age'
+import { canAge } from '../core/engine'
 import { useGame } from '../composables/useGame'
 
 const router = useRouter()
-const { life, choose, dismiss, answer, forgetLife } = useGame()
+const { life, choose, dismiss, answer, forgetLife, age } = useGame()
 
 watch(life, (value) => {
   if (!value) router.replace('/')
 }, { immediate: true })
 
 const initial = computed(() => life.value?.name.slice(0, 1).toUpperCase() ?? '')
+const ageTag = computed(() => (life.value ? ageTagFor(life.value.age) : null))
 
 function closeDeath() {
   forgetLife()
@@ -26,7 +29,7 @@ function closeDeath() {
 </script>
 
 <template>
-  <div v-if="life" class="play">
+  <div v-if="life" class="play play-log">
     <header class="topbar">
       <div class="identity">
         <div class="avatar" aria-hidden="true">{{ initial }}</div>
@@ -40,8 +43,11 @@ function closeDeath() {
     <section class="log-pane" aria-label="Life log">
       <LifeLog :entries="life.log" />
     </section>
+    <div class="age-seam">
+      <button type="button" class="age-orb" :disabled="!canAge(life)" @click="age"><span>Age<br>Up</span></button>
+    </div>
     <main class="stage">
-      <p class="hint">Age {{ life.age }}</p>
+      <p class="hint">Age {{ life.age }}<template v-if="ageTag"> · {{ ageTag.tag }}</template></p>
       <StatList :life="life" />
     </main>
     <BottomDock />

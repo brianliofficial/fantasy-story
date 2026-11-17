@@ -1,6 +1,6 @@
 export type Race = 'Elf' | 'Human' | 'Dwarf'
 export type SocialClass = 'Peasant' | 'Journeyman' | 'Merchant' | 'Noble'
-export const DEFAULT_POOLS = ['Anytime', 'Infant', 'Child', 'Peasant', 'Journeyman', 'Merchant', 'Noble', 'Elf', 'Milestone'] as const
+export const DEFAULT_POOLS = ['Anytime', 'Infant', 'Child', 'Teenager', 'Adult', 'Peasant', 'Journeyman', 'Merchant', 'Noble', 'Elf', 'Milestone'] as const
 export type EventType = (typeof DEFAULT_POOLS)[number]
 export type CheckStat = 'constitution' | 'charisma' | 'intelligence'
 export type RelationRole = 'parent' | 'sibling' | 'friend' | 'teacher'

@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { useGame } from '../composables/useGame'
 import type { GameEventConfig, Life } from '../core/types'
 
 defineProps<{ life: Life; event: GameEventConfig }>()
 const emit = defineEmits<{ choose: [optionId: string] }>()
-const { config } = useGame()
 </script>
 
 <template>
@@ -21,8 +19,8 @@ const { config } = useGame()
         @click="emit('choose', option.id)"
       >
         <span>{{ option.text }}</span>
-        <small v-if="option.checkHouse">{{ config.housing[life.socialClass].toLocaleString('en-US') }} g</small>
-        <small v-else-if="option.checkStat">{{ option.checkStat }} {{ option.threshold ?? 50 }}+</small>
+        <!-- <small v-if="option.checkHouse">{{ config.housing[life.socialClass].toLocaleString('en-US') }} g</small>
+        <small v-else-if="option.checkStat">{{ option.checkStat }} {{ option.threshold ?? 50 }}+</small> -->
       </button>
     </section>
   </div>
