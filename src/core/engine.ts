@@ -568,14 +568,21 @@ function matchesKin(person: Person, kind: string): boolean {
   if (kind === 'brother') return person.role === 'sibling' && person.label === 'Brother'
   if (kind === 'sister') return person.role === 'sibling' && person.label === 'Sister'
   if (kind === 'sibling') return person.role === 'sibling'
+  if (kind === 'wholefamily') return person.role === 'parent' || person.role === 'sibling'
   return person.role === 'friend'
 }
 
 function applyOutcomeLog(life: Life, text: string): { life: Life; text: string } {
   const deaths = new Set<string>()
-  const resolved = text.replace(/\[(mother|father|brother|sister|sibling|friend)\]\s*dies?\b/gi, (mark, who: string) => {
-    const kind = who.toLowerCase()
+  const resolved = text.replace(/\[(mother|father|brother|sister|sibling|friend)\]\s*dies?\b|\[wholefamily\](?:\s*dies?\b)?/gi, (mark, who?: string) => {
+    const kind = (who ?? 'wholefamily').toLowerCase()
     const matches = life.people.filter((item) => matchesKin(item, kind))
+    if (kind === 'wholefamily') {
+      const family = matches.filter((item) => item.alive && !deaths.has(item.id))
+      if (family.length === 0) return matches[0] ? `${matches[0].name} is already gone` : mark
+      family.forEach((item) => deaths.add(item.id))
+      return family.map((item) => `${item.name} dies`).join('. ')
+    }
     const person = matches.find((item) => item.alive && !deaths.has(item.id)) ?? matches[0]
     if (!person) return mark
     if (!person.alive || deaths.has(person.id)) return `${person.name} is already gone`

@@ -182,6 +182,39 @@ describe('fantasylife engine', () => {
     assert.equal(failed.pendingOutcome?.log, 'Bram Hale dies. Nia Hale dies. Owen Pike dies.')
   })
 
+  it('kills every living parent and sibling for the whole family', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const attack = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? {
+            ...option,
+            checkStat: undefined,
+            checkLuck: true,
+            threshold: 50,
+            failure: { log: 'The fire takes [wholefamily].', effect: {} },
+          }
+        : option),
+    }
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    const father = life.people.find((person) => person.label === 'Father')
+    assert.ok(mother && father)
+    const brother = { id: 'bro', name: 'Bram Hale', role: 'sibling' as const, label: 'Brother', gender: 'male' as const, age: 8, relationship: 40, alive: true }
+    const friend = { id: 'pal', name: 'Owen Pike', role: 'friend' as const, label: 'Friend', gender: 'male' as const, age: 20, relationship: 30, alive: true }
+    const failed = chooseOption({
+      ...life,
+      age: 20,
+      people: [...life.people, brother, friend],
+      pendingEvent: attack,
+    }, 'haggle', undefined, zero)
+    assert.equal(failed.people.find((person) => person.id === mother.id)?.alive, false)
+    assert.equal(failed.people.find((person) => person.id === father.id)?.alive, false)
+    assert.equal(failed.people.find((person) => person.id === brother.id)?.alive, false)
+    assert.equal(failed.people.find((person) => person.id === friend.id)?.alive, true)
+    assert.equal(failed.pendingOutcome?.log, `The fire takes ${mother.name} dies. ${father.name} dies. Bram Hale dies.`)
+  })
+
   it('passes the check when the roll plus the stat reaches the threshold', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     let life = born({ socialClass: 'Merchant' })
