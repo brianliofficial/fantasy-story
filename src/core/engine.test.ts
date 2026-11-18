@@ -99,6 +99,24 @@ describe('fantasylife engine', () => {
     assert.equal(life.charisma, 36)
   })
 
+  it('rolls luck from 0 to 100 without adding a stat', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const luck = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, checkLuck: true, threshold: 50 }
+        : option),
+    }
+    const failed = chooseOption({ ...born(), age: 20, charisma: 100, pendingEvent: luck }, 'haggle', undefined, zero)
+    assert.equal(failed.pendingOutcome?.passed, false)
+    assert.deepEqual(failed.pendingOutcome?.roll, { die: 0, stat: 'luck', statValue: 0, total: 0 })
+    assert.equal(failed.charisma, 96)
+
+    const passed = chooseOption({ ...born(), age: 20, charisma: 0, pendingEvent: luck }, 'haggle', undefined, () => 0.5)
+    assert.equal(passed.pendingOutcome?.passed, true)
+    assert.deepEqual(passed.pendingOutcome?.roll, { die: 50, stat: 'luck', statValue: 0, total: 50 })
+  })
+
   it('passes the check when the roll plus the stat reaches the threshold', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     let life = born({ socialClass: 'Merchant' })

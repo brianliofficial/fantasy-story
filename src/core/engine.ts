@@ -384,6 +384,10 @@ export function chooseOption(
   let roll: OutcomeView['roll']
   if (option.checkHouse) {
     passed = Boolean(config) && life.gold >= housePrice
+  } else if (option.checkLuck) {
+    const die = randomInt(random, 0, 100)
+    passed = die >= (option.threshold ?? 50)
+    roll = { die, stat: 'luck', statValue: 0, total: die }
   } else if (option.checkStat) {
     const die = randomInt(random, 0, 100)
     const value = statValue(life, option.checkStat)

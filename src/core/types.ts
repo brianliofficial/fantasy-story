@@ -24,6 +24,7 @@ export interface EventOption {
   id: string
   text: string
   checkStat?: CheckStat
+  checkLuck?: boolean
   checkHouse?: boolean
   clearHouse?: boolean
   threshold?: number
@@ -139,7 +140,7 @@ export interface LogEntry {
 
 export interface OutcomeRoll {
   die: number
-  stat: CheckStat
+  stat: CheckStat | 'luck'
   statValue: number
   total: number
 }

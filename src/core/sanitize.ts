@@ -37,6 +37,10 @@ function isCheckStat(value: unknown): value is CheckStat {
   return CHECK_STATS.includes(value as CheckStat)
 }
 
+function isRollStat(value: unknown): value is CheckStat | 'luck' {
+  return value === 'luck' || isCheckStat(value)
+}
+
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback
 }
@@ -66,7 +70,8 @@ function sanitizeOption(value: unknown): EventOption | null {
     text: value.text.slice(0, 80),
     success: { log: value.success.log.slice(0, 400), effect: statChange(value.success.effect) },
   }
-  if (isCheckStat(value.checkStat)) option.checkStat = value.checkStat
+  if (value.checkLuck === true) option.checkLuck = true
+  else if (isCheckStat(value.checkStat)) option.checkStat = value.checkStat
   if (value.checkHouse === true) option.checkHouse = true
   if (value.clearHouse === true) option.clearHouse = true
   if (typeof value.threshold === 'number' && Number.isFinite(value.threshold)) {
@@ -303,7 +308,7 @@ export function sanitizeLife(value: unknown): Life | null {
     if (typeof value.pendingOutcome.changes === 'string' && value.pendingOutcome.changes.trim()) {
       pendingOutcome.changes = value.pendingOutcome.changes.slice(0, 160)
     }
-    if (isRecord(value.pendingOutcome.roll) && isCheckStat(value.pendingOutcome.roll.stat)) {
+    if (isRecord(value.pendingOutcome.roll) && isRollStat(value.pendingOutcome.roll.stat)) {
       pendingOutcome.roll = {
         die: Math.max(0, Math.min(100, numberOr(value.pendingOutcome.roll.die, 0))),
         stat: value.pendingOutcome.roll.stat,

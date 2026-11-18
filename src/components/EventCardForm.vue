@@ -15,7 +15,7 @@ const logSide = ref<'success' | 'failure'>('success')
 const effectDrafts = ref<Record<string, string>>({})
 
 const current = computed(() => props.event.options[optionIndex.value] ?? props.event.options[0])
-const hasCheck = computed(() => Boolean(current.value?.checkStat || current.value?.checkHouse))
+const hasCheck = computed(() => Boolean(current.value?.checkStat || current.value?.checkLuck || current.value?.checkHouse))
 
 watch(() => props.event.options.length, (length) => {
   if (optionIndex.value >= length) optionIndex.value = Math.max(0, length - 1)
@@ -146,6 +146,7 @@ function setRepeatAfter(raw: string) {
 }
 
 function checkValue(option: EventOption): string {
+  if (option.checkLuck) return 'luck'
   if (option.checkHouse) return 'house'
   return option.checkStat ?? ''
 }
@@ -153,23 +154,36 @@ function checkValue(option: EventOption): string {
 function setCheck(optionId: string, value: string) {
   const option = props.event.options.find((item) => item.id === optionId)
   if (!option) return
+  const failure = option.failure ?? { log: '', effect: {} }
+  if (value === 'luck') {
+    updateOption(optionId, {
+      checkLuck: true,
+      checkHouse: undefined,
+      checkStat: undefined,
+      threshold: option.threshold ?? 50,
+      failure,
+    })
+    return
+  }
   if (value === 'house') {
     updateOption(optionId, {
       checkHouse: true,
+      checkLuck: undefined,
       checkStat: undefined,
-      failure: option.failure ?? { log: '', effect: {} },
+      failure,
     })
     return
   }
   if (!value) {
-    updateOption(optionId, { checkHouse: undefined, checkStat: undefined })
+    updateOption(optionId, { checkHouse: undefined, checkLuck: undefined, checkStat: undefined })
     return
   }
   updateOption(optionId, {
     checkHouse: undefined,
+    checkLuck: undefined,
     checkStat: value as CheckStat,
     threshold: option.threshold ?? 50,
-    failure: option.failure ?? { log: '', effect: {} },
+    failure,
   })
 }
 
@@ -259,14 +273,16 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         <label class="field">Check
           <select :value="checkValue(current)" @change="setCheck(current.id, ($event.target as HTMLSelectElement).value)">
             <option value="">None</option>
+            <option value="luck">Luck</option>
             <option value="house">House price</option>
             <option v-for="stat in CHECK_STATS" :key="stat" :value="stat">{{ stat }}</option>
           </select>
         </label>
-        <label v-if="current.checkStat" class="field">Threshold
+        <label v-if="current.checkStat || current.checkLuck" class="field">Threshold
           <input :value="current.threshold ?? 50" type="number" min="0" max="100" @input="updateOption(current.id, { threshold: Number(($event.target as HTMLInputElement).value) })" />
         </label>
       </div>
+      <p v-if="current.checkLuck" class="hint">Rolls 0–100. No attribute is added. Success when the roll reaches the threshold.</p>
       <p v-if="current.checkHouse" class="hint">Succeeds when gold covers this class's house price from Game config. The price is spent on success.</p>
       <div class="tab-set">
       <div class="tab-bar" role="tablist" aria-label="Outcome logs">
