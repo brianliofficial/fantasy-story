@@ -289,6 +289,7 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         <button type="button" class="tab" role="tab" :aria-selected="logSide === 'success'" :class="{ 'is-selected': logSide === 'success' }" @click="logSide = 'success'">Success log</button>
         <button v-if="hasCheck" type="button" class="tab" role="tab" :aria-selected="logSide === 'failure'" :class="{ 'is-selected': logSide === 'failure' }" @click="logSide = 'failure'">Failure log</button>
       </div>
+      <p class="hint">Write [mother] die, [father] die, [brother] die, [sister] die, [sibling] die, or [friend] die. That person dies, and the life log uses their name.</p>
       <div class="tab-panel log-panel">
       <template v-if="logSide === 'success'">
         <label class="field">Success log

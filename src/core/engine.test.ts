@@ -117,6 +117,71 @@ describe('fantasylife engine', () => {
     assert.deepEqual(passed.pendingOutcome?.roll, { die: 50, stat: 'luck', statValue: 0, total: 50 })
   })
 
+  it('kills a parent named in the outcome log', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const attack = {
+      ...market,
+      title: 'Dragon Attack',
+      options: market.options.map((option) => option.id === 'haggle'
+        ? {
+            ...option,
+            checkStat: undefined,
+            checkLuck: true,
+            threshold: 50,
+            failure: { log: 'The dragon takes [mother] die.', effect: {} },
+            success: { log: 'You drive it off before [father] dies.', effect: {} },
+          }
+        : option),
+    }
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    const father = life.people.find((person) => person.label === 'Father')
+    assert.ok(mother && father)
+    const failed = chooseOption({ ...life, age: 20, pendingEvent: attack }, 'haggle', undefined, zero)
+    assert.equal(failed.people.find((person) => person.id === mother.id)?.alive, false)
+    assert.equal(failed.people.find((person) => person.id === mother.id)?.diedYearsAgo, 0)
+    assert.equal(failed.people.find((person) => person.id === father.id)?.alive, true)
+    assert.equal(failed.pendingOutcome?.log, `The dragon takes ${mother.name} dies.`)
+    assert.equal(failed.log.at(-1)?.text, `The dragon takes ${mother.name} dies.`)
+
+    const passed = chooseOption({ ...life, age: 20, pendingEvent: attack }, 'haggle', undefined, () => 0.5)
+    assert.equal(passed.people.find((person) => person.id === father.id)?.alive, false)
+    assert.equal(passed.people.find((person) => person.id === mother.id)?.alive, true)
+    assert.equal(passed.pendingOutcome?.log, `You drive it off before ${father.name} dies.`)
+  })
+
+  it('kills a sibling or friend named in the outcome log', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const attack = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? {
+            ...option,
+            checkStat: undefined,
+            checkLuck: true,
+            threshold: 50,
+            failure: { log: '[brother] die. [sibling] die. [friend] die.', effect: {} },
+          }
+        : option),
+    }
+    const life = born()
+    const brother = { id: 'bro', name: 'Bram Hale', role: 'sibling' as const, label: 'Brother', gender: 'male' as const, age: 8, relationship: 40, alive: true }
+    const sister = { id: 'sis', name: 'Nia Hale', role: 'sibling' as const, label: 'Sister', gender: 'female' as const, age: 4, relationship: 40, alive: true }
+    const friend = { id: 'pal', name: 'Owen Pike', role: 'friend' as const, label: 'Friend', gender: 'male' as const, age: 20, relationship: 30, alive: true }
+    const failed = chooseOption({
+      ...life,
+      age: 20,
+      charisma: 0,
+      people: [...life.people, brother, sister, friend],
+      pendingEvent: attack,
+    }, 'haggle', undefined, zero)
+    assert.equal(failed.people.find((person) => person.id === brother.id)?.alive, false)
+    assert.equal(failed.people.find((person) => person.id === sister.id)?.alive, false)
+    assert.equal(failed.people.find((person) => person.id === friend.id)?.alive, false)
+    assert.equal(failed.people.find((person) => person.label === 'Mother')?.alive, true)
+    assert.equal(failed.pendingOutcome?.log, 'Bram Hale dies. Nia Hale dies. Owen Pike dies.')
+  })
+
   it('passes the check when the roll plus the stat reaches the threshold', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     let life = born({ socialClass: 'Merchant' })
