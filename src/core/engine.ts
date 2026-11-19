@@ -1,6 +1,5 @@
 import {
   article,
-  householdEventOptions,
   jobChanges,
   MERCHANT_SCHOOLS,
   NOBLE_SUBJECTS,
@@ -16,7 +15,7 @@ import {
   VAGRANT_TITLE,
 } from './childhood'
 import { agePoolFor } from './age'
-import { CHILDHOOD_ID, HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
+import { HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
 import { uid } from './id'
 import { cleanNamePart, pickDistinct, randomIdentity } from './names'
 import type {
@@ -341,10 +340,6 @@ export function ageUp(
     const logged = milestone.id === TEENAGE_ID && next.school
       ? { ...next, log: [...next.log, entry(next.age, 'You reach the end of your basic education.')] }
       : next
-    if (milestone.id === CHILDHOOD_ID) {
-      const offered = childhoodOffer(logged, milestone, random)
-      return present(offered.life, offered.event)
-    }
     return present(logged, milestone)
   }
 
@@ -376,7 +371,6 @@ export function chooseOption(
 ): Life {
   if (!life.alive || !life.pendingEvent) return life
   if (life.pendingEvent.id === TEENAGE_ID) return resolveTeenage(life, config, random)
-  if (life.pendingEvent.id === CHILDHOOD_ID) return resolveChildhood(life, optionId, config, random)
   const option = life.pendingEvent.options.find((item) => item.id === optionId)
   if (!option) return life
   const housePrice = config ? Math.max(0, config.housing[life.socialClass]) : 0
@@ -777,28 +771,6 @@ export function befriend(life: Life, stranger: Stranger, config?: GameConfig): L
     passed: true,
     changes: friend.name,
   })
-}
-
-function childhoodOffer(life: Life, card: GameEventConfig, random: () => number): { life: Life; event: GameEventConfig } {
-  const prepared = assignMissingTrades(life, random)
-  const ready: Life = { ...prepared, duty: 'choosing' }
-  return { life: ready, event: { ...card, options: householdEventOptions(ready) } }
-}
-
-export function showChildhoodMilestone(life: Life, card: GameEventConfig, random: () => number = Math.random): Life {
-  if (!life.alive || life.pendingEvent || life.pendingOutcome || life.pendingOffer || life.duty !== 'choosing') return life
-  const offered = childhoodOffer(life, card, random)
-  return { ...offered.life, pendingEvent: offered.event }
-}
-
-function resolveChildhood(life: Life, optionId: string, config: GameConfig | undefined, random: () => number): Life {
-  const prepared = life.duty === 'choosing' ? life : { ...assignMissingTrades(life, random), duty: 'choosing' as const }
-  const cleared: Life = { ...prepared, pendingEvent: null }
-  if (optionId.startsWith('work:')) return workWithParent(cleared, optionId.slice('work:'.length), config)
-  if (optionId === 'teacher' && config) return seekTeacher(cleared, config, random)
-  if (optionId === 'runaway') return runAway(cleared, random, config)
-  if (optionId.startsWith('school:')) return enroll(cleared, optionId.slice('school:'.length), config)
-  return life
 }
 
 export function openHousehold(life: Life, random: () => number = Math.random, config?: GameConfig): Life {

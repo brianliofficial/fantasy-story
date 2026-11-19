@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { ageTagFor } from './age'
-import { childhoodMilestone, defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
+import { defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
 import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
 import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
 
@@ -596,9 +596,8 @@ describe('fantasylife engine', () => {
     )
   })
 
-  it('forces the childhood milestone when aging to 6', () => {
-    const card = childhoodMilestone()
-    const life = ageUp({ ...born(), age: 5 }, [card, {
+  it('draws a pool event at age 6', () => {
+    const life = ageUp({ ...born(), age: 5 }, [{
       id: 'bell',
       type: 'Anytime',
       title: 'Bell',
@@ -606,23 +605,8 @@ describe('fantasylife engine', () => {
       options: [{ id: 'listen', text: 'Listen', success: { log: 'You listen.', effect: {} } }],
     }], defaultConfig(), zero)
     assert.equal(life.age, 6)
-    assert.equal(life.pendingEvent?.id, 'Milestone_event_1_childhood')
-    assert.equal(life.pendingEvent?.description, 'You are expected to take on responsibilities of your household.')
-    assert.equal(life.pendingEvent?.minAge, 6)
-    assert.equal(life.pendingEvent?.maxAge, 6)
-    const texts = life.pendingEvent?.options.map((option) => option.text) ?? []
-    assert.deepEqual(texts, [
-      'Go to work with your mother as a Farmer',
-      'Go to work with your father as a Farmer',
-      'Seek a teacher who will teach you for free',
-      'Run away from this ragged lifestyle',
-    ])
-    const mother = life.pendingEvent?.options[0]
-    assert.ok(mother)
-    const working = chooseOption(life, mother.id, defaultConfig(), zero)
-    assert.equal(working.pendingEvent, null)
-    assert.equal(working.occupation?.title, 'Farmer')
-    assert.equal(working.duty, 'done')
+    assert.equal(life.pendingEvent?.id, 'bell')
+    assert.equal(life.pendingEvent?.description, 'A bell.')
   })
 
   it('waits ten years before house fire can return', () => {

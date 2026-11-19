@@ -112,28 +112,6 @@ export function teenageMilestone(): GameEventConfig {
   }
 }
 
-export const CHILDHOOD_ID = 'Milestone_event_1_childhood'
-
-export function childhoodMilestone(): GameEventConfig {
-  return {
-    id: CHILDHOOD_ID,
-    type: 'Milestone',
-    title: 'Childhood',
-    description: 'You are expected to take on responsibilities of your household.',
-    minAge: 6,
-    maxAge: 6,
-    showLimit: 1,
-    options: [
-      option('continue', 'Continue', 'You face what your household asks of you.', {}),
-    ],
-  }
-}
-
-export function withChildhood(events: GameEventConfig[]): GameEventConfig[] {
-  if (events.some((event) => event.id === CHILDHOOD_ID)) return events
-  return [...events, childhoodMilestone()]
-}
-
 export function withTeenage(events: GameEventConfig[]): GameEventConfig[] {
   if (events.some((event) => event.id === TEENAGE_ID)) return events
   return [...events, teenageMilestone()]
@@ -231,7 +209,6 @@ export function seedEvents(): GameEventConfig[] {
         option('toast', 'Raise a quiet toast', 'You drink with your family and let the night be simple.', { constitution: 2, parentRelationship: 8 }),
       ],
     },
-    childhoodMilestone(),
     teenageMilestone(),
   ]
 }

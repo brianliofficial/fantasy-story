@@ -297,7 +297,9 @@ export function sanitizeLife(value: unknown): Life | null {
   const people = value.people.map(sanitizePerson).filter((person): person is Person => person !== null)
   const log = value.log.map(sanitizeLog).filter((item): item is LogEntry => item !== null)
   const house = isClass(value.house) ? value.house : null
-  const pendingEvent = value.pendingEvent == null ? null : sanitizeEvent(value.pendingEvent)
+  const pendingEvent = value.pendingEvent == null || (isRecord(value.pendingEvent) && value.pendingEvent.id === 'Milestone_event_1_childhood')
+    ? null
+    : sanitizeEvent(value.pendingEvent)
   let pendingOutcome: Life['pendingOutcome'] = null
   if (isRecord(value.pendingOutcome) && typeof value.pendingOutcome.log === 'string' && typeof value.pendingOutcome.title === 'string') {
     pendingOutcome = {

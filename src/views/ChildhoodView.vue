@@ -8,16 +8,12 @@ import type { ChildhoodAction, Stranger } from '../core/types'
 import { useGame } from '../composables/useGame'
 
 const router = useRouter()
-const { life, config, childhood, showHousehold, addFriend, forgetLife } = useGame()
+const { life, config, childhood, addFriend, forgetLife } = useGame()
 const strangers = ref<Stranger[]>([])
 
 watch(life, (value) => {
   if (!value) {
     router.replace('/')
-    return
-  }
-  if (value.duty === 'choosing' && !value.pendingEvent && !value.pendingOutcome && !value.pendingOffer) {
-    showHousehold()
     return
   }
   if (!shows(config.value, 'childhood', value.age) || shows(config.value, 'infant', value.age)) router.replace('/play')
