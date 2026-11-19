@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { blankEvent } from './defaults'
-import { appendEvent, duplicateEvent, ledgerPools, moveEvent, sameLedger, sanitizePools } from './pools'
+import { appendEvent, ledgerPools, moveEvent, sameLedger, sanitizePools } from './pools'
 import type { GameEventConfig } from './types'
 
 function card(id: string, type: string): GameEventConfig {
