@@ -6,7 +6,7 @@ import { useGame } from '../composables/useGame'
 import { cloneData } from '../core/clone'
 import { blankEvent } from '../core/defaults'
 import { saveEventLedger, supabaseConfigured } from '../core/ledger'
-import { appendEvent, moveEvent } from '../core/pools'
+import { appendEvent, duplicateEvent, moveEvent } from '../core/pools'
 import { eventPoolWorkbook, readEventPoolWorkbook } from '../core/spreadsheet'
 import type { GameEventConfig } from '../core/types'
 import { eventError } from '../core/validate'
@@ -122,6 +122,13 @@ function remove(id: string) {
   upload(events.value, pools.value, 'Event')
 }
 
+function duplicate(id: string) {
+  const source = events.value.find((item) => item.id === id)
+  if (!source) return
+  saveEvents(duplicateEvent(events.value, id))
+  upload(events.value, pools.value, `${source.title.trim() || 'Event'} copy`)
+}
+
 function move(id: string, pool: string, index: number) {
   saveEvents(moveEvent(events.value, id, pool, index))
   upload(events.value, pools.value, 'Event pool')
@@ -215,14 +222,19 @@ function confirmRemovePool() {
       @move="move"
       @open="open"
       @add="add"
+      @remove="remove"
+      @duplicate="duplicate"
       @add-pool="addPool"
       @remove-pool="removePool"
     />
-    <div v-if="editing" class="modal-backdrop" @click.self="editing = null">
+    <div v-if="editing" class="modal-backdrop">
       <div class="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
-        <h2 id="editor-title">{{ editing.title || 'New event' }}</h2>
-        <EventCardForm :event="editing" :pools="pools" :error="error" @change="change" @save="save" @remove="remove" />
-        <button type="button" class="btn" @click="editing = null">Close</button>
+        <button type="button" class="modal-x" aria-label="Close" @click="editing = null">×</button>
+        <div class="editor-body">
+          <h2 id="editor-title">{{ editing.title || 'New event' }}</h2>
+          <EventCardForm :event="editing" :pools="pools" :error="error" @change="change" @save="save" @remove="remove" />
+          <button type="button" class="btn" @click="editing = null">Close</button>
+        </div>
       </div>
     </div>
     <div v-if="incoming" class="modal-backdrop" @click.self="incoming = null">
@@ -280,8 +292,35 @@ function confirmRemovePool() {
 }
 
 .editor-modal {
+  position: relative;
   width: min(100%, 640px);
+  overflow: visible;
 
   :deep(.event-card) { border: 0; padding: 0; box-shadow: none; }
+}
+
+.editor-body {
+  max-height: min(85dvh, 720px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-x {
+  position: absolute;
+  top: -39px;
+  right: -30px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #130e0b;
+  color: #e8c77b;
+  font-size: 1.4rem;
+  line-height: 1;
 }
 </style>

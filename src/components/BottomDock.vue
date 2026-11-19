@@ -20,9 +20,8 @@ const menus = computed(() => {
 })
 const adult = computed(() => {
   const current = life.value
-  if (!current) return { guild: false, assets: false, activities: false }
+  if (!current) return { assets: false, activities: false }
   return {
-    guild: shows(config.value, 'guild', current.age),
     assets: shows(config.value, 'assets', current.age),
     activities: shows(config.value, 'activities', current.age),
   }
@@ -45,7 +44,6 @@ const adult = computed(() => {
       <RouterLink v-if="menus.romance" to="/romance"><span class="mark" aria-hidden="true">♡</span>Romance</RouterLink>
     </template>
     <template v-else>
-      <RouterLink v-if="adult.guild" to="/guild"><span class="mark" aria-hidden="true">⚔</span>Guild</RouterLink>
       <RouterLink v-if="adult.assets" to="/assets"><span class="mark" aria-hidden="true">⌂</span>Assets</RouterLink>
       <RouterLink to="/relationships"><span class="mark" aria-hidden="true">♥</span>Relations</RouterLink>
       <RouterLink v-if="adult.activities" to="/activities"><span class="mark" aria-hidden="true">✦</span>Activities</RouterLink>
@@ -65,17 +63,24 @@ const adult = computed(() => {
   transform: translateX(-50%);
   width: min(100%, 480px);
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-around;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
   align-items: flex-end;
   gap: 4px;
   padding: 8px 8px calc(8px + var(--safe-bottom));
   background: #16100c;
   border-top: 1px solid var(--line);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar { display: none; }
 
   a {
-    flex: 1 1 68px;
-    max-width: 120px;
+    flex: 0 0 calc((100% + 8px - 5 * 4px) / 5.5);
+    width: calc((100% + 8px - 5 * 4px) / 5.5);
+    min-width: 0;
+    box-sizing: border-box;
     min-height: 48px;
     display: flex;
     flex-direction: column;

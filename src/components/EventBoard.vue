@@ -15,12 +15,15 @@ const emit = defineEmits<{
   add: [pool: string]
   addPool: [name: string]
   removePool: [pool: string]
+  remove: [id: string]
+  duplicate: [id: string]
 }>()
 
 const boardRef = ref<HTMLElement | null>(null)
 const poolName = ref('')
 const poolError = ref('')
 const panning = ref(false)
+const moving = ref<GameEventConfig | null>(null)
 const { drag, begin } = usePoolDrag(boardRef, (id, pool, index) => emit('move', id, pool, index))
 let panPointer = -1
 let panOrigin = 0
@@ -109,6 +112,19 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
   if (!pool) return
   emit('move', card.id, pool, 0)
 }
+
+function otherPools(card: GameEventConfig | null): string[] {
+  if (!card) return []
+  return props.pools.filter((pool) => pool !== card.type)
+}
+
+function confirmMove(pool: string) {
+  const card = moving.value
+  if (!card || !pool || pool === card.type) return
+  const index = props.events.filter((event) => event.type === pool).length
+  moving.value = null
+  emit('move', card.id, pool, index)
+}
 </script>
 
 <template>
@@ -151,6 +167,17 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
               <span v-if="card.minAge == null && card.maxAge == null">Any age</span>
               <span v-else>Age {{ card.minAge ?? 0 }}–{{ card.maxAge ?? MAX_AGE }}</span>
             </button>
+            <div class="card-menu">
+              <button type="button" class="icon-btn" :aria-label="`Duplicate ${card.title || 'Untitled'}`" @click="emit('duplicate', card.id)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              </button>
+              <button type="button" class="icon-btn" :aria-label="`Move ${card.title || 'Untitled'}`" @click="moving = card">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="icon-btn is-danger" :aria-label="`Delete ${card.title || 'Untitled'}`" @click="emit('remove', card.id)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M8 7l1 13h6l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
           </article>
         </template>
         <div v-if="drag?.active && drag.overPool === column.pool && drag.overIndex === column.events.length" class="drop-line" />
@@ -166,6 +193,16 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
       <p v-if="poolError" class="form-error">{{ poolError }}</p>
       <button type="submit" class="btn btn-primary btn-block">Add pool</button>
     </form>
+    <div v-if="moving" class="modal-backdrop">
+      <section class="modal move-dialog" role="dialog" aria-modal="true" aria-labelledby="move-card-title">
+        <h2 id="move-card-title">Move {{ moving.title || 'Untitled' }}</h2>
+        <p>Which event pool should this card move to?</p>
+        <div class="choice-row">
+          <button v-for="pool in otherPools(moving)" :key="pool" type="button" class="btn" @click="confirmMove(pool)">{{ pool }}</button>
+        </div>
+        <button type="button" class="btn" @click="moving = null">Cancel</button>
+      </section>
+    </div>
     <div
       v-if="drag?.active"
       class="drag-ghost"
@@ -193,7 +230,7 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
 }
 
 .pool-column {
-  flex: 0 0 min(280px, 82vw);
+  flex: 0 0 min(320px, 86vw);
   background: #1b1511;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -251,6 +288,7 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
 
 .pool-card-body {
   flex: 1;
+  min-width: 0;
   min-height: 44px;
   border: 0;
   background: transparent;
@@ -260,8 +298,34 @@ function moveAcross(card: GameEventConfig, delta: -1 | 1) {
   justify-content: center;
   padding: 0;
 
+  strong { overflow-wrap: anywhere; }
   span { color: var(--muted); font-size: 0.85rem; }
 }
+
+.card-menu {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #130e0b;
+  color: #e8c77b;
+
+  svg { width: 16px; height: 16px; }
+  &.is-danger { color: #e7b2b2; border-color: rgba(140, 35, 35, 0.55); }
+}
+
+.move-dialog { width: min(100%, 480px); }
 
 .drop-line { height: 4px; border-radius: 999px; background: var(--blue); }
 

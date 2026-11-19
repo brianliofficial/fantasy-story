@@ -1,3 +1,5 @@
+import { cloneData } from './clone'
+import { uid } from './id'
 import { sanitizeEvents } from './sanitize'
 import { DEFAULT_POOLS } from './types'
 import type { GameEventConfig } from './types'
@@ -65,4 +67,17 @@ export function moveEvent(events: GameEventConfig[], id: string, pool: string, i
 
 export function appendEvent(events: GameEventConfig[], event: GameEventConfig): GameEventConfig[] {
   return moveEvent([...events.filter((item) => item.id !== event.id), event], event.id, event.type, Number.MAX_SAFE_INTEGER)
+}
+
+export function duplicateEvent(events: GameEventConfig[], id: string): GameEventConfig[] {
+  const index = events.findIndex((item) => item.id === id)
+  const event = events[index]
+  if (!event || index < 0) return events
+  const copy = cloneData(event)
+  copy.id = uid()
+  copy.title = event.title.trim() ? `${event.title.trim().slice(0, 55)} copy` : 'Copy'
+  copy.options = copy.options.map((option) => ({ ...option, id: uid() }))
+  const next = [...events]
+  next.splice(index + 1, 0, copy)
+  return next
 }

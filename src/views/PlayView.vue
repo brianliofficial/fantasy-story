@@ -103,8 +103,14 @@ function closeDeath() {
   span { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 600; }
 }
 
+.play-log {
+  padding-bottom: calc(65px + var(--safe-bottom));
+
+  .stage { flex: none; }
+}
+
 .log-pane {
-  height: 50vh;
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
