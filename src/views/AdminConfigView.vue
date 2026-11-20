@@ -76,7 +76,7 @@ function restore() {
     <div class="admin-grid">
       <section class="card">
         <h2>Race modifiers</h2>
-        <p class="hint">Added to a starting score of 0. A result below 0 stays at 0.</p>
+        <p class="hint">Added to the birth roll. Constitution rolls 50–100. Charisma and intelligence roll 0–100. A result below 0 stays at 0.</p>
         <div v-for="race in RACES" :key="race" class="option-card">
           <h2>{{ race }}</h2>
           <label class="field">Constitution

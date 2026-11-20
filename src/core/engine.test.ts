@@ -31,38 +31,38 @@ describe('fantasylife engine', () => {
   it('applies the race bonus at birth', () => {
     const elf = createLife({ forename: '  Mira  ', surname: ' Hale ', gender: 'female', race: 'Elf', socialClass: 'Peasant' }, defaultConfig(), zero)
     assert.equal(elf.name, 'Mira Hale')
-    assert.equal(elf.constitution, 0)
+    assert.equal(elf.constitution, 40)
     assert.equal(elf.charisma, 20)
     assert.equal(elf.intelligence, 0)
     assert.equal(elf.gold, 0)
     assert.equal(elf.people.filter((person) => person.role === 'parent').length, 2)
     const human = born({ gender: 'male', race: 'Human' })
-    assert.equal(human.constitution, 5)
+    assert.equal(human.constitution, 55)
     assert.equal(human.charisma, 5)
     assert.equal(human.intelligence, 5)
     const dwarf = born({ race: 'Dwarf' })
-    assert.equal(dwarf.constitution, 20)
+    assert.equal(dwarf.constitution, 70)
     assert.equal(dwarf.charisma, 0)
     assert.equal(dwarf.intelligence, 0)
   })
 
-  it('rolls each score from 0 to 100 before the race bonus', () => {
+  it('rolls constitution from 50 to 100 and the other scores from 0 to 100', () => {
     const human = createLife({
       forename: 'Mira', surname: 'Hale', gender: 'female', race: 'Human', socialClass: 'Peasant',
     }, defaultConfig(), scripted([0.5, 0.5, 0.5]))
-    assert.equal(human.constitution, 55)
+    assert.equal(human.constitution, 80)
     assert.equal(human.charisma, 55)
     assert.equal(human.intelligence, 55)
     const elf = createLife({
       forename: 'Mira', surname: 'Hale', gender: 'female', race: 'Elf', socialClass: 'Peasant',
     }, defaultConfig(), scripted([0, 0.5, 0]))
-    assert.equal(elf.constitution, 0)
+    assert.equal(elf.constitution, 40)
     assert.equal(elf.charisma, 70)
     assert.equal(elf.intelligence, 0)
     const dwarf = createLife({
       forename: 'Mira', surname: 'Hale', gender: 'male', race: 'Dwarf', socialClass: 'Peasant',
     }, defaultConfig(), scripted([0.5, 0, 0.5]))
-    assert.equal(dwarf.constitution, 70)
+    assert.equal(dwarf.constitution, 95)
     assert.equal(dwarf.charisma, 0)
     assert.equal(dwarf.intelligence, 50)
   })
@@ -215,6 +215,67 @@ describe('fantasylife engine', () => {
     assert.equal(failed.pendingOutcome?.log, `The fire takes ${mother.name} dies. ${father.name} dies. Bram Hale dies.`)
   })
 
+  it('kills a random living relative when the mother is already dead', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const attack = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, success: { log: 'The fever takes [mother] die.', effect: {} } }
+        : option),
+    }
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    const father = life.people.find((person) => person.label === 'Father')
+    assert.ok(mother && father)
+    const brother = { id: 'bro', name: 'Bram Hale', role: 'sibling' as const, label: 'Brother', gender: 'male' as const, age: 8, relationship: 40, alive: true }
+    const sister = { id: 'sis', name: 'Nia Hale', role: 'sibling' as const, label: 'Sister', gender: 'female' as const, age: 4, relationship: 40, alive: true }
+    const people = life.people.map((person) => person.id === mother.id ? { ...person, alive: false, diedYearsAgo: 4 } : person)
+    const withKin = { ...life, age: 20, people: [...people, brother, sister], pendingEvent: attack }
+    const first = chooseOption(withKin, 'haggle', undefined, zero)
+    assert.equal(first.people.find((person) => person.id === mother.id)?.alive, false)
+    assert.equal(first.people.find((person) => person.id === father.id)?.alive, false)
+    assert.equal(first.people.find((person) => person.id === brother.id)?.alive, true)
+    assert.equal(first.pendingOutcome?.log, `The fever takes ${father.name} dies.`)
+
+    const last = chooseOption(withKin, 'haggle', undefined, () => 0.99)
+    assert.equal(last.people.find((person) => person.id === sister.id)?.alive, false)
+    assert.equal(last.people.find((person) => person.id === father.id)?.alive, true)
+    assert.equal(last.pendingOutcome?.log, 'The fever takes Nia Hale dies.')
+
+    const noneLeft = {
+      ...withKin,
+      people: withKin.people.map((person) => (
+        person.role === 'parent' || person.role === 'sibling' ? { ...person, alive: false, diedYearsAgo: 1 } : person
+      )),
+    }
+    const gone = chooseOption(noneLeft, 'haggle', undefined, zero)
+    assert.equal(gone.pendingOutcome?.log, `The fever takes ${mother.name} is already gone.`)
+  })
+
+  it('kills a random living relative when there is no friend', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const attack = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, success: { log: 'A quarrel ends when [friend] die.', effect: {} } }
+        : option),
+    }
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    const father = life.people.find((person) => person.label === 'Father')
+    assert.ok(mother && father)
+    const waiting = { ...life, age: 20, pendingEvent: attack }
+    const first = chooseOption(waiting, 'haggle', undefined, zero)
+    assert.equal(first.people.find((person) => person.id === mother.id)?.alive, false)
+    assert.equal(first.people.find((person) => person.id === father.id)?.alive, true)
+    assert.equal(first.pendingOutcome?.log, `A quarrel ends when ${mother.name} dies.`)
+
+    const second = chooseOption(waiting, 'haggle', undefined, () => 0.5)
+    assert.equal(second.people.find((person) => person.id === father.id)?.alive, false)
+    assert.equal(second.people.find((person) => person.id === mother.id)?.alive, true)
+    assert.equal(second.pendingOutcome?.log, `A quarrel ends when ${father.name} dies.`)
+  })
+
   it('passes the check when the roll plus the stat reaches the threshold', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     let life = born({ socialClass: 'Merchant' })
@@ -264,7 +325,7 @@ describe('fantasylife engine', () => {
 
   it('lets an infant with no constitution reach the next year', () => {
     let life = createLife({ forename: 'Mira', surname: 'Hale', gender: 'female', race: 'Elf', socialClass: 'Peasant' }, defaultConfig(), zero)
-    life = ageUp(life, [], defaultConfig(), zero)
+    life = ageUp({ ...life, constitution: 0 }, [], defaultConfig(), zero)
     assert.equal(life.alive, true)
     assert.equal(life.age, 1)
     assert.equal(life.constitution, 0)

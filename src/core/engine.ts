@@ -97,7 +97,7 @@ export function createLife(
   const surname = cleanNamePart(input.surname) || 'Hale'
   const name = `${forename} ${surname}`
   const bonus = config.races[input.race]
-  const constitution = clampScore(randomInt(random, 0, 100) + bonus.constitution)
+  const constitution = clampScore(randomInt(random, 50, 100) + bonus.constitution)
   const charisma = clampScore(randomInt(random, 0, 100) + bonus.charisma)
   const intelligence = clampScore(randomInt(random, 0, 100) + bonus.intelligence)
   const pool = config.names[input.race]
@@ -397,7 +397,7 @@ export function chooseOption(
   } else if ((option.checkHouse && !passed) || option.clearHouse) {
     next = { ...next, house: null }
   }
-  const told = applyOutcomeLog(next, outcome.log)
+  const told = applyOutcomeLog(next, outcome.log, random)
   next = {
     ...told.life,
     pendingEvent: null,
@@ -566,7 +566,21 @@ function matchesKin(person: Person, kind: string): boolean {
   return person.role === 'friend'
 }
 
-function applyOutcomeLog(life: Life, text: string): { life: Life; text: string } {
+function livingRelatives(life: Life, deaths: Set<string>): Person[] {
+  return life.people.filter((person) => (
+    (person.role === 'parent' || person.role === 'sibling') && person.alive && !deaths.has(person.id)
+  ))
+}
+
+function standInRelative(life: Life, deaths: Set<string>, random: () => number, gone: Person | undefined, mark: string): string {
+  const relatives = livingRelatives(life, deaths)
+  const chosen = relatives.length === 0 ? undefined : relatives[randomInt(random, 0, relatives.length - 1)]
+  if (!chosen) return gone ? `${gone.name} is already gone` : mark
+  deaths.add(chosen.id)
+  return `${chosen.name} dies`
+}
+
+function applyOutcomeLog(life: Life, text: string, random: () => number): { life: Life; text: string } {
   const deaths = new Set<string>()
   const resolved = text.replace(/\[(mother|father|brother|sister|sibling|friend)\]\s*dies?\b|\[wholefamily\](?:\s*dies?\b)?/gi, (mark, who?: string) => {
     const kind = (who ?? 'wholefamily').toLowerCase()
@@ -577,7 +591,9 @@ function applyOutcomeLog(life: Life, text: string): { life: Life; text: string }
       family.forEach((item) => deaths.add(item.id))
       return family.map((item) => `${item.name} dies`).join('. ')
     }
-    const person = matches.find((item) => item.alive && !deaths.has(item.id)) ?? matches[0]
+    const living = matches.find((item) => item.alive && !deaths.has(item.id))
+    if ((kind === 'mother' || kind === 'friend') && !living) return standInRelative(life, deaths, random, matches[0], mark)
+    const person = living ?? matches[0]
     if (!person) return mark
     if (!person.alive || deaths.has(person.id)) return `${person.name} is already gone`
     deaths.add(person.id)
