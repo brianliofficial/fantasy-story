@@ -45,3 +45,25 @@ create policy "game events are editable"
   to anon, authenticated
   using (true)
   with check (true);
+
+-- Shared event-pool copies. The app keeps the newest five and deletes the rest.
+
+create table if not exists public.pool_history (
+  id text primary key,
+  saved_at bigint not null,
+  reason text not null default 'Auto save',
+  events jsonb not null default '[]'::jsonb,
+  pools jsonb not null default '[]'::jsonb
+);
+
+alter table public.pool_history enable row level security;
+
+grant select, insert, update, delete on public.pool_history to anon, authenticated;
+
+drop policy if exists "pool history is editable" on public.pool_history;
+create policy "pool history is editable"
+  on public.pool_history
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);

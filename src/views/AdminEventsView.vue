@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import EventBoard from '../components/EventBoard.vue'
 import EventCardForm from '../components/EventCardForm.vue'
 import { useGame } from '../composables/useGame'
 import { cloneData } from '../core/clone'
 import { blankEvent } from '../core/defaults'
-import { saveEventLedger, supabaseConfigured } from '../core/ledger'
+import { loadPoolHistory, saveEventLedger, savePoolHistoryRows, supabaseConfigured } from '../core/ledger'
 import { POOL_HISTORY_KEY, readPoolHistory, rememberSnapshot, type PoolSnapshot } from '../core/poolHistory'
 import { appendEvent, duplicateEvent, moveEvent } from '../core/pools'
 import { eventPoolWorkbook, readEventPoolWorkbook } from '../core/spreadsheet'
@@ -18,7 +18,12 @@ const error = ref('')
 const pendingDelete = ref('')
 const pendingCard = ref('')
 const historyOpen = ref(false)
+const menuOpen = ref(false)
 const history = ref<PoolSnapshot[]>(readPoolHistory(localStorage.getItem(POOL_HISTORY_KEY)))
+const narrowQuery = window.matchMedia('(max-width: 720px)')
+let historyBusy = 0
+let historyTableMissing = false
+let historyChain: Promise<void> = Promise.resolve()
 const incoming = ref<{ events: GameEventConfig[]; pools: string[] } | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const notice = ref<{ ok: boolean; text: string; label: string } | null>(null)
@@ -31,11 +36,93 @@ let pollTimer = 0
 const pendingDeleteCount = computed(() => events.value.filter((event) => event.type === pendingDelete.value).length)
 const pendingCardTitle = computed(() => events.value.find((event) => event.id === pendingCard.value)?.title.trim() || 'Untitled')
 
-function remember(reason: string) {
-  const next = rememberSnapshot(history.value, events.value, pools.value, reason)
-  if (next === history.value) return
-  history.value = next
-  localStorage.setItem(POOL_HISTORY_KEY, JSON.stringify(next))
+function onNarrow() {
+  if (!narrowQuery.matches) menuOpen.value = false
+}
+
+onMounted(() => narrowQuery.addEventListener('change', onNarrow))
+
+function remember(reason: string, manual = false) {
+  const eventsCopy = cloneData(events.value)
+  const poolsCopy = [...pools.value]
+  const now = Date.now()
+  historyChain = historyChain.then(() => storeHistory(eventsCopy, poolsCopy, reason, now, manual), () => storeHistory(eventsCopy, poolsCopy, reason, now, manual))
+}
+
+async function storeHistory(eventsCopy: GameEventConfig[], poolsCopy: string[], reason: string, now: number, manual: boolean) {
+  historyBusy += 1
+  try {
+    let base = history.value
+    if (configured && !historyTableMissing) {
+      try {
+        base = await loadPoolHistory()
+      } catch (caught) {
+        noteHistoryError(caught)
+      }
+    }
+    const next = rememberSnapshot(base, eventsCopy, poolsCopy, reason, now, manual)
+    history.value = next
+    localStorage.setItem(POOL_HISTORY_KEY, JSON.stringify(next))
+    if (next === base || !configured || historyTableMissing) return
+    await savePoolHistoryRows(next)
+  } catch (caught) {
+    noteHistoryError(caught)
+  } finally {
+    historyBusy -= 1
+  }
+}
+
+async function pullHistory() {
+  if (!configured || historyBusy > 0 || historyTableMissing) return
+  try {
+    const remote = await loadPoolHistory()
+    if (remote.length === 0) {
+      const local = readPoolHistory(localStorage.getItem(POOL_HISTORY_KEY))
+      if (local.length > 0) {
+        history.value = local
+        historyBusy += 1
+        try {
+          await savePoolHistoryRows(local)
+        } finally {
+          historyBusy -= 1
+        }
+        return
+      }
+    }
+    history.value = remote
+    localStorage.setItem(POOL_HISTORY_KEY, JSON.stringify(remote))
+  } catch (caught) {
+    noteHistoryError(caught)
+  }
+}
+
+function noteHistoryError(caught: unknown) {
+  const detail = caught instanceof Error ? caught.message : 'Pool history was not shared.'
+  if (/pool_history|PGRST205|42P01|schema cache/i.test(detail)) {
+    if (historyTableMissing) return
+    historyTableMissing = true
+    showNotice(false, 'Shared pool history needs the new Supabase table. Copies on this browser are still kept.')
+    return
+  }
+  showNotice(false, detail)
+}
+
+historyChain = pullHistory()
+const historyReady = historyChain
+
+function queueHistoryRefresh() {
+  historyChain = historyChain.then(() => pullHistory(), () => pullHistory())
+}
+
+function openHistory() {
+  historyOpen.value = true
+  queueHistoryRefresh()
+}
+
+function savePoolHistory() {
+  remember('Manual save', true)
+  const count = `${events.value.length} event${events.value.length === 1 ? '' : 's'}`
+  showNotice(true, `Pool history saved. ${count}.`, 'Saved')
 }
 
 function savedWhen(savedAt: number) {
@@ -54,7 +141,7 @@ watch(ledgerNotice, (value) => {
   if (!value) return
   const label = value.ok ? (value.text.startsWith('Event pool loaded') ? 'Loaded' : 'Saved') : 'Not saved'
   showNotice(value.ok, value.text, label)
-  if (value.ok && value.text.startsWith('Event pool loaded')) remember('Auto save')
+  if (value.ok && value.text.startsWith('Event pool loaded')) void historyReady.then(() => remember('Auto save'))
   armPoll()
 }, { immediate: true })
 
@@ -71,6 +158,7 @@ function onVisible() {
 async function pullRemote() {
   if (writes > 0 || document.hidden) return
   const changed = await refreshLedger()
+  queueHistoryRefresh()
   if (!changed) return
   const count = `${events.value.length} event${events.value.length === 1 ? '' : 's'} are set`
   showNotice(true, `Event pool updated. ${count}.`, 'Updated')
@@ -79,6 +167,7 @@ async function pullRemote() {
 onUnmounted(() => {
   window.clearInterval(pollTimer)
   document.removeEventListener('visibilitychange', onVisible)
+  narrowQuery.removeEventListener('change', onNarrow)
 })
 
 function open(id: string) {
@@ -245,10 +334,16 @@ function restoreSnapshot(snapshot: PoolSnapshot) {
 
 <template>
   <div class="page page-wide pool-page">
+    <button v-if="menuOpen" type="button" class="nav-backdrop" aria-label="Close menu" @click="menuOpen = false" />
     <header class="admin-head">
       <h1>Event pool</h1>
-      <nav class="admin-links">
-        <button type="button" class="text-link" @click="historyOpen = true">Event pool history</button>
+      <button type="button" class="nav-toggle" :aria-expanded="menuOpen" aria-controls="pool-actions" @click="menuOpen = !menuOpen">
+        <span class="nav-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+        {{ menuOpen ? 'Close' : 'Menu' }}
+      </button>
+      <nav id="pool-actions" class="admin-links" :class="{ 'is-open': menuOpen }" @click="menuOpen = false">
+        <button type="button" class="text-link" @click="savePoolHistory">Save pool history</button>
+        <button type="button" class="text-link" @click="openHistory">Event pool history</button>
         <button type="button" class="text-link" @click="exportExcel">Export Excel</button>
         <button type="button" class="text-link" @click="fileInput?.click()">Import Excel</button>
         <input ref="fileInput" class="sr-only" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="stageImport" />
@@ -295,7 +390,7 @@ function restoreSnapshot(snapshot: PoolSnapshot) {
     <div v-if="historyOpen" class="modal-backdrop">
       <section class="modal history-dialog" role="dialog" aria-modal="true" aria-labelledby="pool-history-title">
         <h2 id="pool-history-title">Event pool history</h2>
-        <p>The last five automatic copies. Restore one if a pool was deleted.</p>
+        <p>The last five copies are shared with everyone on this event pool. Older copies are deleted.</p>
         <div v-if="history.length === 0" class="hint">No copies yet. A copy is kept before each change.</div>
         <div v-else class="history-list">
           <article v-for="snapshot in history" :key="snapshot.id" class="history-row">

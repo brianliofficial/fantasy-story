@@ -33,6 +33,16 @@ describe('event pool history', () => {
     assert.equal(twice[0]?.savedAt, 10)
   })
 
+  it('keeps a manual save even when the pool has not changed', () => {
+    const events = [card('a', 'Dwarf')]
+    const once = rememberSnapshot([], events, ['Dwarf'], 'Auto save', 10)
+    const manual = rememberSnapshot(once, events, ['Dwarf'], 'Manual save', 40, true)
+    assert.equal(manual.length, 1)
+    assert.equal(manual[0]?.reason, 'Manual save')
+    assert.equal(manual[0]?.savedAt, 40)
+    assert.equal(manual[0]?.id, once[0]?.id)
+  })
+
   it('reads saved copies and ignores a broken store', () => {
     const saved = rememberSnapshot([], [card('a', 'Dwarf')], ['Dwarf'], 'Before deleting Dwarf', 30)
     const raw = JSON.stringify([{ savedAt: 'nope' }, ...saved])

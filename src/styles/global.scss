@@ -270,6 +270,74 @@ a { color: var(--blue); }
   a { color: #e8c77b; min-height: 44px; display: inline-flex; align-items: center; font-weight: 700; }
 }
 
+.nav-toggle {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #e8c77b;
+  font-weight: 700;
+}
+
+.nav-bars {
+  width: 18px;
+  height: 12px;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  span {
+    display: block;
+    height: 2px;
+    background: currentColor;
+    border-radius: 999px;
+  }
+}
+
+.nav-backdrop { display: none; }
+
+@media (max-width: 720px) {
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 14;
+    border: 0;
+    background: rgba(8, 6, 4, 0.45);
+  }
+
+  .admin-head {
+    position: relative;
+    z-index: 16;
+    flex-wrap: wrap;
+  }
+
+  .nav-toggle { display: inline-flex; }
+
+  .admin-links {
+    display: none;
+    flex: 1 0 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding-bottom: 4px;
+
+    &.is-open { display: flex; }
+
+    a, .text-link {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      width: 100%;
+      border-top: 1px solid var(--line);
+      padding: 0 4px;
+    }
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

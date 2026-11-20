@@ -20,15 +20,20 @@ export function rememberSnapshot(
   pools: string[],
   reason: string,
   now = Date.now(),
+  manual = false,
 ): PoolSnapshot[] {
   const eventsCopy = cloneData(events)
   const poolsCopy = [...pools]
+  const label = reason.trim().slice(0, 120) || 'Auto save'
   const newest = history[0]
-  if (newest && sameLedger(newest.events, newest.pools, eventsCopy, poolsCopy)) return history
+  if (newest && sameLedger(newest.events, newest.pools, eventsCopy, poolsCopy)) {
+    if (!manual) return history
+    return [{ ...newest, savedAt: now, reason: label }, ...history.slice(1)]
+  }
   const next: PoolSnapshot = {
     id: uid(),
     savedAt: now,
-    reason: reason.trim().slice(0, 120) || 'Auto save',
+    reason: label,
     events: eventsCopy,
     pools: poolsCopy,
   }

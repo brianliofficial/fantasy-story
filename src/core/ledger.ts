@@ -1,3 +1,4 @@
+import { POOL_HISTORY_LIMIT, readPoolHistory, type PoolSnapshot } from './poolHistory'
 import { sanitizeEvents } from './sanitize'
 import type { GameEventConfig } from './types'
 
@@ -117,6 +118,55 @@ async function deleteMissing(table: string, column: string, keep: string[]): Pro
   }
   const list = keep.map((value) => `"${value.replace(/"/g, '')}"`).join(',')
   await rest(`${table}?${column}=not.in.(${list})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+}
+
+interface HistoryRow {
+  id: string
+  saved_at: number | string
+  reason: string
+  events: GameEventConfig[]
+  pools: string[]
+}
+
+let historyQueue = Promise.resolve()
+
+export async function loadPoolHistory(): Promise<PoolSnapshot[]> {
+  const rows = await rest<HistoryRow[]>('pool_history?select=*&order=saved_at.desc') ?? []
+  const keep = historyFromRows(rows).slice(0, POOL_HISTORY_LIMIT)
+  if (rows.length > keep.length) await deleteMissing('pool_history', 'id', keep.map((snapshot) => snapshot.id))
+  return keep
+}
+
+export function savePoolHistoryRows(snapshots: PoolSnapshot[]): Promise<void> {
+  const keep = snapshots.slice(0, POOL_HISTORY_LIMIT)
+  if (keep.length === 0) return Promise.resolve()
+  const run = historyQueue.then(() => writePoolHistory(keep))
+  historyQueue = run.then(() => undefined, () => undefined)
+  return run
+}
+
+async function writePoolHistory(keep: PoolSnapshot[]): Promise<void> {
+  await rest('pool_history?on_conflict=id', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(keep.map((snapshot) => ({
+      id: snapshot.id,
+      saved_at: snapshot.savedAt,
+      reason: snapshot.reason,
+      events: snapshot.events,
+      pools: snapshot.pools,
+    }))),
+  })
+  await deleteMissing('pool_history', 'id', keep.map((snapshot) => snapshot.id))
+}
+
+function historyFromRows(rows: HistoryRow[]): PoolSnapshot[] {
+  const snapshots = rows.flatMap((row) => {
+    const savedAt = typeof row.saved_at === 'number' ? row.saved_at : Number(row.saved_at)
+    if (!Number.isFinite(savedAt)) return []
+    return [{ id: row.id, savedAt, reason: row.reason, events: row.events, pools: row.pools }]
+  })
+  return readPoolHistory(JSON.stringify(snapshots))
 }
 
 function supabaseUrl(): string {

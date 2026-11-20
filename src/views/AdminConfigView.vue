@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useGame } from '../composables/useGame'
 import { cloneData } from '../core/clone'
 import { parseNameList } from '../core/names'
@@ -9,6 +9,15 @@ import { CLASSES, RACES } from '../core/types'
 const { config, saveConfig, resetConfig } = useGame()
 const draft = reactive<GameConfig>(cloneData(config.value))
 const saved = ref(false)
+const menuOpen = ref(false)
+const narrowQuery = window.matchMedia('(max-width: 720px)')
+
+function onNarrow() {
+  if (!narrowQuery.matches) menuOpen.value = false
+}
+
+onMounted(() => narrowQuery.addEventListener('change', onNarrow))
+onUnmounted(() => narrowQuery.removeEventListener('change', onNarrow))
 const nameText = reactive<Record<Race, Record<keyof RaceNames, string>>>({
   Elf: { maleForenames: '', femaleForenames: '', surnames: '' },
   Human: { maleForenames: '', femaleForenames: '', surnames: '' },
@@ -52,9 +61,14 @@ function restore() {
 
 <template>
   <div class="page page-wide">
+    <button v-if="menuOpen" type="button" class="nav-backdrop" aria-label="Close menu" @click="menuOpen = false" />
     <header class="admin-head">
       <h1>Game config</h1>
-      <nav class="admin-links">
+      <button type="button" class="nav-toggle" :aria-expanded="menuOpen" aria-controls="config-actions" @click="menuOpen = !menuOpen">
+        <span class="nav-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+        {{ menuOpen ? 'Close' : 'Menu' }}
+      </button>
+      <nav id="config-actions" class="admin-links" :class="{ 'is-open': menuOpen }" @click="menuOpen = false">
         <RouterLink to="/admin/events">Events</RouterLink>
         <RouterLink to="/">Game</RouterLink>
       </nav>
