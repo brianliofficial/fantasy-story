@@ -373,12 +373,9 @@ export function chooseOption(
   if (life.pendingEvent.id === TEENAGE_ID) return resolveTeenage(life, config, random)
   const option = life.pendingEvent.options.find((item) => item.id === optionId)
   if (!option) return life
-  const housePrice = config ? Math.max(0, config.housing[life.socialClass]) : 0
   let passed = true
   let roll: OutcomeView['roll']
-  if (option.checkHouse) {
-    passed = Boolean(config) && life.gold >= housePrice
-  } else if (option.checkLuck) {
+  if (option.checkLuck) {
     const die = randomInt(random, 0, 100)
     passed = die >= (option.threshold ?? 50)
     roll = { die, stat: 'luck', statValue: 0, total: die }
@@ -392,11 +389,7 @@ export function chooseOption(
   const outcome = passed || !option.failure ? option.success : option.failure
   if (!outcome) return life
   let next = applyEffect(life, outcome.effect)
-  if (option.checkHouse && passed && config) {
-    next = { ...next, gold: Math.max(0, next.gold - housePrice), house: life.socialClass }
-  } else if ((option.checkHouse && !passed) || option.clearHouse) {
-    next = { ...next, house: null }
-  }
+  if (option.clearHouse) next = { ...next, house: null }
   const told = applyOutcomeLog(next, outcome.log, random)
   next = {
     ...told.life,
@@ -580,9 +573,21 @@ function standInRelative(life: Life, deaths: Set<string>, random: () => number, 
   return `${chosen.name} dies`
 }
 
+export function nameKin(text: string, life: Life, random: () => number = Math.random): string {
+  return text.replace(/\[(mother|father|brother|sister|sibling|friend)\]/gi, (mark, who: string) => {
+    const kind = who.toLowerCase()
+    const matches = life.people.filter((person) => matchesKin(person, kind))
+    const living = matches.filter((person) => person.alive)
+    const pool = living.length > 0 ? living : matches
+    if (pool.length === 0) return mark
+    if (kind === 'mother' || kind === 'father') return pool[0]?.name ?? mark
+    return pool[randomInt(random, 0, pool.length - 1)]?.name ?? mark
+  })
+}
+
 function applyOutcomeLog(life: Life, text: string, random: () => number): { life: Life; text: string } {
   const deaths = new Set<string>()
-  const resolved = text.replace(/\[(mother|father|brother|sister|sibling|friend)\]\s*dies?\b|\[wholefamily\](?:\s*dies?\b)?/gi, (mark, who?: string) => {
+  const resolved = nameKin(text.replace(/\[(mother|father|brother|sister|sibling|friend)\]\s*dies?\b|\[wholefamily\](?:\s*dies?\b)?/gi, (mark, who?: string) => {
     const kind = (who ?? 'wholefamily').toLowerCase()
     const matches = life.people.filter((item) => matchesKin(item, kind))
     if (kind === 'wholefamily') {
@@ -598,7 +603,7 @@ function applyOutcomeLog(life: Life, text: string, random: () => number): { life
     if (!person.alive || deaths.has(person.id)) return `${person.name} is already gone`
     deaths.add(person.id)
     return `${person.name} dies`
-  })
+  }), life, random)
   if (deaths.size === 0) return { life, text: resolved }
   const people = life.people.map((person) => (
     deaths.has(person.id) ? { ...person, alive: false, diedYearsAgo: 0 } : person

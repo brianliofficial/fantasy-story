@@ -65,7 +65,6 @@ export function houseFireEvent(): GameEventConfig {
       {
         id: 'rebuild',
         text: 'Rebuild better',
-        checkHouse: true,
         success: {
           log: 'Our new home is the envy of your neighbours.',
           effect: { charisma: 10 },

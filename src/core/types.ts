@@ -25,7 +25,6 @@ export interface EventOption {
   text: string
   checkStat?: CheckStat
   checkLuck?: boolean
-  checkHouse?: boolean
   clearHouse?: boolean
   threshold?: number
   success: {

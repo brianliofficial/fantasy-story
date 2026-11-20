@@ -15,7 +15,7 @@ const logSide = ref<'success' | 'failure'>('success')
 const effectDrafts = ref<Record<string, string>>({})
 
 const current = computed(() => props.event.options[optionIndex.value] ?? props.event.options[0])
-const hasCheck = computed(() => Boolean(current.value?.checkStat || current.value?.checkLuck || current.value?.checkHouse))
+const hasCheck = computed(() => Boolean(current.value?.checkStat || current.value?.checkLuck))
 
 watch(() => props.event.options.length, (length) => {
   if (optionIndex.value >= length) optionIndex.value = Math.max(0, length - 1)
@@ -147,7 +147,6 @@ function setRepeatAfter(raw: string) {
 
 function checkValue(option: EventOption): string {
   if (option.checkLuck) return 'luck'
-  if (option.checkHouse) return 'house'
   return option.checkStat ?? ''
 }
 
@@ -158,28 +157,17 @@ function setCheck(optionId: string, value: string) {
   if (value === 'luck') {
     updateOption(optionId, {
       checkLuck: true,
-      checkHouse: undefined,
       checkStat: undefined,
       threshold: option.threshold ?? 50,
       failure,
     })
     return
   }
-  if (value === 'house') {
-    updateOption(optionId, {
-      checkHouse: true,
-      checkLuck: undefined,
-      checkStat: undefined,
-      failure,
-    })
-    return
-  }
   if (!value) {
-    updateOption(optionId, { checkHouse: undefined, checkLuck: undefined, checkStat: undefined })
+    updateOption(optionId, { checkLuck: undefined, checkStat: undefined })
     return
   }
   updateOption(optionId, {
-    checkHouse: undefined,
     checkLuck: undefined,
     checkStat: value as CheckStat,
     threshold: option.threshold ?? 50,
@@ -274,7 +262,6 @@ const poolBand = computed(() => agePoolFor(props.event.type))
           <select :value="checkValue(current)" @change="setCheck(current.id, ($event.target as HTMLSelectElement).value)">
             <option value="">None</option>
             <option value="luck">Luck</option>
-            <option value="house">House price</option>
             <option v-for="stat in CHECK_STATS" :key="stat" :value="stat">{{ stat }}</option>
           </select>
         </label>
@@ -283,13 +270,12 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         </label>
       </div>
       <p v-if="current.checkLuck" class="hint">Rolls 0–100. No attribute is added. Success when the roll reaches the threshold.</p>
-      <p v-if="current.checkHouse" class="hint">Succeeds when gold covers this class's house price from Game config. The price is spent on success.</p>
       <div class="tab-set">
       <div class="tab-bar" role="tablist" aria-label="Outcome logs">
         <button type="button" class="tab" role="tab" :aria-selected="logSide === 'success'" :class="{ 'is-selected': logSide === 'success' }" @click="logSide = 'success'">Success log</button>
         <button v-if="hasCheck" type="button" class="tab" role="tab" :aria-selected="logSide === 'failure'" :class="{ 'is-selected': logSide === 'failure' }" @click="logSide = 'failure'">Failure log</button>
       </div>
-      <p class="hint">Write [mother] die, [father] die, [brother] die, [sister] die, [sibling] die, or [friend] die. If the mother is already dead, or there is no friend, a random living parent or sibling dies instead. [wholefamily] die kills every living parent and sibling. The life log uses their names.</p>
+      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and the story uses that person's name. [brother], [sister], [sibling], and [friend] pick a random match. Add die, as in [mother] die, when that person dies. If the mother is already dead, or there is no friend, a random living parent or sibling dies instead. [wholefamily] die kills every living parent and sibling.</p>
       <div class="tab-panel log-panel">
       <template v-if="logSide === 'success'">
         <label class="field">Success log

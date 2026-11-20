@@ -117,10 +117,13 @@ function begin() {
   display: grid;
   place-items: center;
   padding: 24px 16px;
+  overflow-x: clip;
 }
 
 .home-card {
   width: min(100%, 440px);
+  max-width: 100%;
+  min-width: 0;
   background: linear-gradient(165deg, #251d16 0%, #1a140f 55%, #16100c 100%);
   border: 1.5px solid #8c6b32;
   border-radius: 24px;
@@ -142,7 +145,11 @@ function begin() {
 }
 
 .death-marquee {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
+  contain: inline-size;
   border: 1px solid #6e3a3a;
   border-radius: 999px;
   background: #1a100e;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { ageTagFor } from './age'
 import { defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
-import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
+import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, nameKin, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
 import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
 
 const zero = () => 0
@@ -276,6 +276,35 @@ describe('fantasylife engine', () => {
     assert.equal(second.pendingOutcome?.log, `A quarrel ends when ${father.name} dies.`)
   })
 
+  it('uses a parent name and a random matching relative', () => {
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    const father = life.people.find((person) => person.label === 'Father')
+    assert.ok(mother && father)
+    const nia = { id: 's1', name: 'Nia Hale', role: 'sibling' as const, label: 'Sister', gender: 'female' as const, age: 6, relationship: 40, alive: true }
+    const ada = { id: 's2', name: 'Ada Hale', role: 'sibling' as const, label: 'Sister', gender: 'female' as const, age: 9, relationship: 40, alive: true }
+    const withSisters = { ...life, people: [...life.people, nia, ada] }
+    assert.equal(nameKin('Your [mother] and [father].', withSisters, zero), `Your ${mother.name} and ${father.name}.`)
+    assert.equal(nameKin('[sister] waves.', withSisters, zero), 'Nia Hale waves.')
+    assert.equal(nameKin('[sister] waves.', withSisters, () => 0.99), 'Ada Hale waves.')
+    assert.equal(nameKin('[friend] calls.', withSisters, zero), '[friend] calls.')
+    assert.equal(withSisters.people.find((person) => person.id === mother.id)?.alive, true)
+
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const visit = {
+      ...market,
+      title: '[mother] at the gate',
+      description: '[sister] waits with [mother].',
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, text: 'Call [father]', checkStat: undefined, success: { log: '[mother] sees [sister] when [mother] die.', effect: {} } }
+        : option),
+    }
+    const told = chooseOption({ ...withSisters, age: 20, pendingEvent: visit }, 'haggle', undefined, zero)
+    assert.equal(told.people.find((person) => person.id === mother.id)?.alive, false)
+    assert.equal(told.people.find((person) => person.id === nia.id)?.alive, true)
+    assert.equal(told.pendingOutcome?.log, `${mother.name} sees Nia Hale when ${mother.name} dies.`)
+  })
+
   it('passes the check when the roll plus the stat reaches the threshold', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     let life = born({ socialClass: 'Merchant' })
@@ -386,7 +415,7 @@ describe('fantasylife engine', () => {
     assert.equal(older.pendingOutcome, null)
   })
 
-  it('rebuilds a burned home when the purse covers the class price', () => {
+  it('rebuilds a burned home without charging a house price', () => {
     const config = defaultConfig()
     const fire = seedEvents().find((event) => event.id === 'Anytime_event_001')
     assert.ok(fire)
@@ -401,26 +430,20 @@ describe('fantasylife engine', () => {
     assert.equal(life.pendingOutcome?.passed, true)
     assert.equal(life.log.at(-1)?.text, 'Our new home is the envy of your neighbours.')
     assert.equal(life.charisma, 10)
-    assert.equal(life.gold, 0)
-    assert.equal(life.house, 'Peasant')
+    assert.equal(life.gold, 500)
+    assert.equal(life.house, null)
 
     const poor = chooseOption({ ...infant, gold: 499, charisma: 0, constitution: 40, house: 'Peasant', pendingEvent: fire }, 'rebuild', config)
-    assert.equal(poor.pendingOutcome?.passed, false)
-    assert.equal(poor.constitution, 20)
+    assert.equal(poor.pendingOutcome?.passed, true)
+    assert.equal(poor.constitution, 40)
     assert.equal(poor.gold, 499)
-    assert.equal(poor.house, null)
-    assert.equal(poor.log.at(-1)?.text, 'You live on the street.')
+    assert.equal(poor.house, 'Peasant')
 
     const street = chooseOption({ ...infant, gold: 5000, constitution: 40, house: 'Noble', pendingEvent: fire }, 'street', config)
     assert.equal(street.constitution, 20)
     assert.equal(street.house, null)
     assert.equal(street.gold, 5000)
     assert.equal(street.log.at(-1)?.text, 'You live on the street.')
-
-    const noble = chooseOption({ ...born({ socialClass: 'Noble' }), gold: 10000, charisma: 0, pendingEvent: fire }, 'rebuild', config)
-    assert.equal(noble.gold, 0)
-    assert.equal(noble.house, 'Noble')
-    assert.equal(noble.charisma, 10)
   })
 
   it('gives parents a trade and pays that salary each year', () => {

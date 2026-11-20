@@ -72,7 +72,6 @@ function sanitizeOption(value: unknown): EventOption | null {
   }
   if (value.checkLuck === true) option.checkLuck = true
   else if (isCheckStat(value.checkStat)) option.checkStat = value.checkStat
-  if (value.checkHouse === true) option.checkHouse = true
   if (value.clearHouse === true) option.clearHouse = true
   if (typeof value.threshold === 'number' && Number.isFinite(value.threshold)) {
     option.threshold = Math.max(0, Math.min(100, Math.round(value.threshold)))
