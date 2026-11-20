@@ -40,7 +40,9 @@ function run(activity: PersonActivity) {
         <p class="hint">Age {{ person.age }} · {{ person.alive ? 'Living' : 'Gone' }}</p>
         <div v-if="person.alive" class="stat">
           <span>Bond</span>
-          <div class="track"><div class="fill" :style="{ width: `${person.relationship}%`, background: '#3caf5a' }" /></div>
+          <div class="track" role="meter" :aria-valuenow="person.relationship" aria-valuemin="0" aria-valuemax="100" aria-label="Bond">
+            <div class="fill" :style="{ width: `${Math.max(0, Math.min(100, person.relationship))}%`, background: '#3caf5a' }" />
+          </div>
           <span>{{ person.relationship }}</span>
         </div>
         <p v-else>Died {{ person.diedYearsAgo ?? 0 }} years ago.</p>

@@ -27,6 +27,10 @@ function roleLabel(role: RelationRole): string {
   if (role === 'sibling') return 'Sibling'
   return 'Friend'
 }
+
+function bondWidth(score: number): string {
+  return `${Math.max(0, Math.min(100, score))}%`
+}
 </script>
 
 <template>
@@ -41,16 +45,19 @@ function roleLabel(role: RelationRole): string {
       <section v-for="section in sections" :key="section.key">
         <h2 class="group-label">{{ section.title }}</h2>
         <RouterLink v-for="person in section.people" :key="person.id" class="person-row" :to="`/relationships/${person.id}`">
-          <span>
+          <span class="who">
             <strong>{{ person.name }}</strong>
             <small v-if="person.alive"> ({{ person.label }})</small>
             <small v-else> · died {{ person.diedYearsAgo ?? 0 }} years ago</small>
-            <span v-if="person.alive" class="track relation-track" style="display:block;margin-top:6px">
-              <span class="fill" :style="{ width: `${person.relationship}%`, background: '#3caf5a' }" />
+          </span>
+          <span v-if="person.alive" class="bond">
+            <span class="track relation-track" role="meter" :aria-valuenow="person.relationship" aria-valuemin="0" aria-valuemax="100" aria-label="Bond">
+              <span class="fill" :style="{ width: bondWidth(person.relationship), background: '#3caf5a' }" />
             </span>
+            <span class="bond-score">{{ person.relationship }}</span>
           </span>
           <span aria-hidden="true">›</span>
-          <span class="sr-only">{{ roleLabel(person.role) }}, relationship {{ person.relationship }}</span>
+          <span class="sr-only">{{ roleLabel(person.role) }}, bond {{ person.relationship }}</span>
         </RouterLink>
       </section>
     </main>
@@ -59,5 +66,22 @@ function roleLabel(role: RelationRole): string {
 </template>
 
 <style lang="scss" scoped>
-.relation-track { width: 72px; }
+.who { flex: 1; min-width: 0; }
+
+.bond {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 112px;
+  flex: none;
+}
+
+.relation-track { flex: 1; min-width: 0; }
+
+.bond-score {
+  width: 2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
 </style>
