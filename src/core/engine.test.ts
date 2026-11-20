@@ -128,8 +128,8 @@ describe('fantasylife engine', () => {
             checkStat: undefined,
             checkLuck: true,
             threshold: 50,
-            failure: { log: 'The dragon takes [mother] die.', effect: {} },
-            success: { log: 'You drive it off before [father] dies.', effect: {} },
+            failure: { log: 'The dragon takes [mother_die].', effect: {} },
+            success: { log: 'You drive it off before [FATHER_DIE].', effect: {} },
           }
         : option),
     }
@@ -148,6 +148,16 @@ describe('fantasylife engine', () => {
     assert.equal(passed.people.find((person) => person.id === father.id)?.alive, false)
     assert.equal(passed.people.find((person) => person.id === mother.id)?.alive, true)
     assert.equal(passed.pendingOutcome?.log, `You drive it off before ${father.name} dies.`)
+
+    const spaced = {
+      ...attack,
+      options: attack.options.map((option) => option.id === 'haggle'
+        ? { ...option, failure: { log: 'The dragon takes [MothEr] die.', effect: {} } }
+        : option),
+    }
+    const oldForm = chooseOption({ ...life, age: 20, pendingEvent: spaced }, 'haggle', undefined, zero)
+    assert.equal(oldForm.people.find((person) => person.id === mother.id)?.alive, true)
+    assert.equal(oldForm.pendingOutcome?.log, `The dragon takes ${mother.name} die.`)
   })
 
   it('kills a sibling or friend named in the outcome log', () => {
@@ -160,7 +170,7 @@ describe('fantasylife engine', () => {
             checkStat: undefined,
             checkLuck: true,
             threshold: 50,
-            failure: { log: '[brother] die. [sibling] die. [friend] die.', effect: {} },
+            failure: { log: '[brother_die]. [SIBLING_DIE]. [friend_die].', effect: {} },
           }
         : option),
     }
@@ -192,7 +202,7 @@ describe('fantasylife engine', () => {
             checkStat: undefined,
             checkLuck: true,
             threshold: 50,
-            failure: { log: 'The fire takes [wholefamily].', effect: {} },
+            failure: { log: 'The fire takes [wholefamily_die].', effect: {} },
           }
         : option),
     }
@@ -220,7 +230,7 @@ describe('fantasylife engine', () => {
     const attack = {
       ...market,
       options: market.options.map((option) => option.id === 'haggle'
-        ? { ...option, checkStat: undefined, success: { log: 'The fever takes [mother] die.', effect: {} } }
+        ? { ...option, checkStat: undefined, success: { log: 'The fever takes [MOTHER_DIE].', effect: {} } }
         : option),
     }
     const life = born()
@@ -257,7 +267,7 @@ describe('fantasylife engine', () => {
     const attack = {
       ...market,
       options: market.options.map((option) => option.id === 'haggle'
-        ? { ...option, checkStat: undefined, success: { log: 'A quarrel ends when [friend] die.', effect: {} } }
+        ? { ...option, checkStat: undefined, success: { log: 'A quarrel ends when [friend_die].', effect: {} } }
         : option),
     }
     const life = born()
@@ -285,9 +295,16 @@ describe('fantasylife engine', () => {
     const ada = { id: 's2', name: 'Ada Hale', role: 'sibling' as const, label: 'Sister', gender: 'female' as const, age: 9, relationship: 40, alive: true }
     const withSisters = { ...life, people: [...life.people, nia, ada] }
     assert.equal(nameKin('Your [mother] and [father].', withSisters, zero), `Your ${mother.name} and ${father.name}.`)
+    assert.equal(nameKin('Your [MothEr] and [FaThEr].', withSisters, zero), `Your ${mother.name} and ${father.name}.`)
     assert.equal(nameKin('[sister] waves.', withSisters, zero), 'Nia Hale waves.')
     assert.equal(nameKin('[sister] waves.', withSisters, () => 0.99), 'Ada Hale waves.')
     assert.equal(nameKin('[friend] calls.', withSisters, zero), '[friend] calls.')
+    const motherGone = {
+      ...withSisters,
+      people: withSisters.people.map((person) => person.id === mother.id ? { ...person, alive: false } : person),
+    }
+    assert.equal(nameKin('[mother] waits.', motherGone, zero), `${father.name} waits.`)
+    assert.equal(nameKin('[MothEr] waits.', motherGone, () => 0.99), 'Ada Hale waits.')
     assert.equal(withSisters.people.find((person) => person.id === mother.id)?.alive, true)
 
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
@@ -296,13 +313,21 @@ describe('fantasylife engine', () => {
       title: '[mother] at the gate',
       description: '[sister] waits with [mother].',
       options: market.options.map((option) => option.id === 'haggle'
-        ? { ...option, text: 'Call [father]', checkStat: undefined, success: { log: '[mother] sees [sister] when [mother] die.', effect: {} } }
+        ? { ...option, text: 'Call [FaThEr]', checkStat: undefined, success: { log: '[mother] sees [sister] when [mother_die].', effect: {} } }
         : option),
     }
     const told = chooseOption({ ...withSisters, age: 20, pendingEvent: visit }, 'haggle', undefined, zero)
     assert.equal(told.people.find((person) => person.id === mother.id)?.alive, false)
     assert.equal(told.people.find((person) => person.id === nia.id)?.alive, true)
+    assert.equal(told.pendingOutcome?.title, `${mother.name} at the gate`)
     assert.equal(told.pendingOutcome?.log, `${mother.name} sees Nia Hale when ${mother.name} dies.`)
+
+    const caps = chooseOption({
+      ...withSisters,
+      age: 20,
+      pendingEvent: { ...visit, title: '[MOTHER] [FATHER] TEST' },
+    }, 'haggle', undefined, zero)
+    assert.equal(caps.pendingOutcome?.title, `${mother.name} ${father.name} TEST`)
   })
 
   it('passes the check when the roll plus the stat reaches the threshold', () => {

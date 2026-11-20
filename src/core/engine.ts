@@ -395,7 +395,7 @@ export function chooseOption(
     ...told.life,
     pendingEvent: null,
     pendingOutcome: {
-      title: passed ? life.pendingEvent.title : 'It goes badly',
+      title: nameKin(passed ? life.pendingEvent.title : 'It goes badly', next, random),
       log: told.text,
       passed,
       roll,
@@ -559,18 +559,24 @@ function matchesKin(person: Person, kind: string): boolean {
   return person.role === 'friend'
 }
 
-function livingRelatives(life: Life, deaths: Set<string>): Person[] {
-  return life.people.filter((person) => (
-    (person.role === 'parent' || person.role === 'sibling') && person.alive && !deaths.has(person.id)
-  ))
+function livingRelations(life: Life, deaths: Set<string>): Person[] {
+  return life.people.filter((person) => person.alive && !deaths.has(person.id))
 }
 
 function standInRelative(life: Life, deaths: Set<string>, random: () => number, gone: Person | undefined, mark: string): string {
-  const relatives = livingRelatives(life, deaths)
+  const relatives = livingRelations(life, deaths)
   const chosen = relatives.length === 0 ? undefined : relatives[randomInt(random, 0, relatives.length - 1)]
   if (!chosen) return gone ? `${gone.name} is already gone` : mark
   deaths.add(chosen.id)
   return `${chosen.name} dies`
+}
+
+function standInName(life: Life, blocked: Set<string>, random: () => number): string | undefined {
+  const others = life.people.filter((person) => !blocked.has(person.id))
+  const living = others.filter((person) => person.alive)
+  const pool = living.length > 0 ? living : others
+  if (pool.length === 0) return undefined
+  return pool[randomInt(random, 0, pool.length - 1)]?.name
 }
 
 export function nameKin(text: string, life: Life, random: () => number = Math.random): string {
@@ -578,17 +584,21 @@ export function nameKin(text: string, life: Life, random: () => number = Math.ra
     const kind = who.toLowerCase()
     const matches = life.people.filter((person) => matchesKin(person, kind))
     const living = matches.filter((person) => person.alive)
-    const pool = living.length > 0 ? living : matches
-    if (pool.length === 0) return mark
-    if (kind === 'mother' || kind === 'father') return pool[0]?.name ?? mark
-    return pool[randomInt(random, 0, pool.length - 1)]?.name ?? mark
+    if (living.length > 0) {
+      const chosen = kind === 'mother' || kind === 'father'
+        ? living[0]
+        : living[randomInt(random, 0, living.length - 1)]
+      return chosen?.name ?? mark
+    }
+    if (matches.length === 0) return mark
+    return standInName(life, new Set(matches.map((person) => person.id)), random) ?? matches[0]?.name ?? mark
   })
 }
 
 function applyOutcomeLog(life: Life, text: string, random: () => number): { life: Life; text: string } {
   const deaths = new Set<string>()
-  const resolved = nameKin(text.replace(/\[(mother|father|brother|sister|sibling|friend)\]\s*dies?\b|\[wholefamily\](?:\s*dies?\b)?/gi, (mark, who?: string) => {
-    const kind = (who ?? 'wholefamily').toLowerCase()
+  const resolved = nameKin(text.replace(/\[(mother|father|brother|sister|sibling|friend|wholefamily)_die\]/gi, (mark, token: string) => {
+    const kind = token.toLowerCase()
     const matches = life.people.filter((item) => matchesKin(item, kind))
     if (kind === 'wholefamily') {
       const family = matches.filter((item) => item.alive && !deaths.has(item.id))
@@ -597,12 +607,9 @@ function applyOutcomeLog(life: Life, text: string, random: () => number): { life
       return family.map((item) => `${item.name} dies`).join('. ')
     }
     const living = matches.find((item) => item.alive && !deaths.has(item.id))
-    if ((kind === 'mother' || kind === 'friend') && !living) return standInRelative(life, deaths, random, matches[0], mark)
-    const person = living ?? matches[0]
-    if (!person) return mark
-    if (!person.alive || deaths.has(person.id)) return `${person.name} is already gone`
-    deaths.add(person.id)
-    return `${person.name} dies`
+    if (!living) return standInRelative(life, deaths, random, matches[0], mark)
+    deaths.add(living.id)
+    return `${living.name} dies`
   }), life, random)
   if (deaths.size === 0) return { life, text: resolved }
   const people = life.people.map((person) => (

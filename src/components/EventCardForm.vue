@@ -275,7 +275,7 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         <button type="button" class="tab" role="tab" :aria-selected="logSide === 'success'" :class="{ 'is-selected': logSide === 'success' }" @click="logSide = 'success'">Success log</button>
         <button v-if="hasCheck" type="button" class="tab" role="tab" :aria-selected="logSide === 'failure'" :class="{ 'is-selected': logSide === 'failure' }" @click="logSide = 'failure'">Failure log</button>
       </div>
-      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and the story uses that person's name. [brother], [sister], [sibling], and [friend] pick a random match. Add die, as in [mother] die, when that person dies. If the mother is already dead, or there is no friend, a random living parent or sibling dies instead. [wholefamily] die kills every living parent and sibling.</p>
+      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and the story uses that person's name. [brother], [sister], [sibling], and [friend] pick a random match. Capital letters do not matter, so [mother] and [MothEr] are the same. If that person is already dead, a random other character's name is shown instead. Write [mother_die] when that person dies. If that character is already gone, a random relationship dies instead. [wholefamily_die] kills every living parent and sibling.</p>
       <div class="tab-panel log-panel">
       <template v-if="logSide === 'success'">
         <label class="field">Success log
