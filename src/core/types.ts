@@ -48,6 +48,7 @@ export interface GameEventConfig {
   requiredClass?: SocialClass[]
   showLimit?: number
   repeatAfter?: number
+  mandatory?: boolean
   options: EventOption[]
 }
 

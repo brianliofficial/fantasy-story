@@ -15,6 +15,7 @@ function card(id: string, type: string): GameEventConfig {
   event.maxAge = 12
   event.showLimit = 2
   event.repeatAfter = 4
+  event.mandatory = true
   event.requiredRace = ['Elf']
   event.requiredClass = ['Noble']
   event.options[0]!.id = `${id}-go`
@@ -38,6 +39,7 @@ describe('event pool workbook', () => {
     assert.equal(restored.events[0]?.minAge, 6)
     assert.equal(restored.events[0]?.showLimit, 2)
     assert.equal(restored.events[0]?.repeatAfter, 4)
+    assert.equal(restored.events[0]?.mandatory, true)
     assert.deepEqual(restored.events[0]?.requiredRace, ['Elf'])
     assert.deepEqual(restored.events[0]?.requiredClass, ['Noble'])
     assert.equal(restored.events[0]?.options[0]?.text, 'Go on')

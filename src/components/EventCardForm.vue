@@ -215,6 +215,10 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         </label>
       </div>
       <p class="hint">Leave an age blank to leave that side open. Leave both blank and the event can happen at any age.</p>
+      <label class="check-row">
+        <input type="checkbox" :checked="event.mandatory === true" @change="update({ mandatory: ($event.target as HTMLInputElement).checked || undefined })" />
+        Mandatory
+      </label>
       <p v-if="event.type === 'Anytime'" class="hint">Anytime events appear at most 5 times in one life. Years between keeps a repeat from happening again until that many years have passed.</p>
       <p class="hint">Race filter. Leave all off to allow every race.</p>
       <div class="toggle-row">
@@ -275,7 +279,7 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         <button type="button" class="tab" role="tab" :aria-selected="logSide === 'success'" :class="{ 'is-selected': logSide === 'success' }" @click="logSide = 'success'">Success log</button>
         <button v-if="hasCheck" type="button" class="tab" role="tab" :aria-selected="logSide === 'failure'" :class="{ 'is-selected': logSide === 'failure' }" @click="logSide = 'failure'">Failure log</button>
       </div>
-      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and the story uses that person's name. [brother], [sister], [sibling], and [friend] pick a random match. Capital letters do not matter, so [mother] and [MothEr] are the same. If that person is already dead, a random other character's name is shown instead. Write [mother_die] when that person dies. If that character is already gone, a random relationship dies instead. [wholefamily_die] kills every living parent and sibling.</p>
+      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and that character's name is shown instead. Write [mother_die] when that person dies. [father_die], [brother_die], [sister_die], [sibling_die], and [friend_die] follow the same rule.</p>
       <div class="tab-panel log-panel">
       <template v-if="logSide === 'success'">
         <label class="field">Success log
@@ -310,6 +314,20 @@ const poolBand = computed(() => agePoolFor(props.event.type))
 </template>
 
 <style lang="scss" scoped>
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 700;
+
+  input {
+    width: 18px;
+    height: 18px;
+    accent-color: #c9a252;
+  }
+}
+
 .event-card {
   background: var(--card);
   border-radius: 16px;

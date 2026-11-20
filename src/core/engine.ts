@@ -349,6 +349,8 @@ export function ageUp(
     && canOffer(next, event)
     && poolOpen(event.type, next.age, config, next.socialClass)
   ))
+  const mandatory = eligible.filter((event) => event.mandatory)
+  if (mandatory.length > 0) eligible = mandatory
   if (eligible.length === 0) {
     return {
       ...next,

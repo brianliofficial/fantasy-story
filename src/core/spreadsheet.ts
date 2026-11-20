@@ -3,7 +3,7 @@ import { ledgerPools } from './pools'
 import { sanitizeEvent } from './sanitize'
 import type { GameEventConfig } from './types'
 
-const EVENT_HEADERS = ['id', 'pool', 'title', 'description', 'minAge', 'maxAge', 'showLimit', 'repeatAfter', 'requiredRace', 'requiredClass', 'options'] as const
+const EVENT_HEADERS = ['id', 'pool', 'title', 'description', 'minAge', 'maxAge', 'showLimit', 'repeatAfter', 'mandatory', 'requiredRace', 'requiredClass', 'options'] as const
 
 export function eventPoolWorkbook(events: GameEventConfig[], pools: string[]): Uint8Array {
   const book = XLSX.utils.book_new()
@@ -81,6 +81,7 @@ function rowToEvent(row: Record<string, unknown>, rowNumber: number): GameEventC
     showLimit: optionalNumber(row.showLimit),
     repeatAfter: optionalNumber(row.repeatAfter),
     requiredRace: splitList(row.requiredRace),
+    mandatory: cellFlag(row.mandatory),
     requiredClass: splitList(row.requiredClass),
     options,
   })
@@ -104,6 +105,12 @@ function cellText(value: unknown): string {
 }
 
 function optionalNumber(value: unknown): number | undefined {
+function cellFlag(value: unknown): boolean {
+  if (value === true || value === 1) return true
+  const text = cellText(value).toLowerCase()
+  return text === 'true' || text === 'yes' || text === '1'
+}
+
   if (typeof value === 'number' && Number.isFinite(value)) return value
   const text = cellText(value)
   if (!text) return undefined

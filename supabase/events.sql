@@ -19,10 +19,12 @@ create table if not exists public.game_events (
   required_class jsonb not null default '[]'::jsonb,
   options jsonb not null default '[]'::jsonb,
   position integer not null default 0,
-  repeat_after integer
+  repeat_after integer,
+  mandatory boolean not null default false
 );
 
 alter table public.game_events add column if not exists repeat_after integer;
+alter table public.game_events add column if not exists mandatory boolean not null default false;
 
 alter table public.event_pools enable row level security;
 alter table public.game_events enable row level security;

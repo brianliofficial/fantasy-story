@@ -15,6 +15,7 @@ interface EventRow {
   options: GameEventConfig['options']
   position: number
   repeat_after?: number | null
+  mandatory?: boolean | null
 }
 
 interface PoolRow {
@@ -45,11 +46,24 @@ export function saveEventLedger(events: GameEventConfig[], pools: string[]): Pro
 }
 
 async function writeLedger(events: GameEventConfig[], pools: string[]): Promise<void> {
-  try {
-    await writeEvents(events, true)
-  } catch (caught) {
-    if (!missingRepeatColumn(caught)) throw caught
-    await writeEvents(events, false)
+  let includeRepeat = true
+  let includeMandatory = true
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await writeEvents(events, includeRepeat, includeMandatory)
+      break
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : ''
+      if (includeRepeat && message.includes('repeat_after')) {
+        includeRepeat = false
+        continue
+      }
+      if (includeMandatory && message.includes('mandatory')) {
+        includeMandatory = false
+        continue
+      }
+      throw caught
+    }
   }
   const poolRows = pools.map((name, position) => ({ name, position }))
   if (poolRows.length > 0) {
@@ -63,9 +77,9 @@ async function writeLedger(events: GameEventConfig[], pools: string[]): Promise<
   await deleteMissing('event_pools', 'name', pools)
 }
 
-async function writeEvents(events: GameEventConfig[], includeRepeat: boolean): Promise<void> {
+async function writeEvents(events: GameEventConfig[], includeRepeat: boolean, includeMandatory: boolean): Promise<void> {
   if (events.length === 0) return
-  const eventRows = events.map((event, position) => eventToRow(event, position, includeRepeat))
+  const eventRows = events.map((event, position) => eventToRow(event, position, includeRepeat, includeMandatory))
   await rest('game_events?on_conflict=id', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -73,11 +87,7 @@ async function writeEvents(events: GameEventConfig[], includeRepeat: boolean): P
   })
 }
 
-function missingRepeatColumn(caught: unknown): boolean {
-  return caught instanceof Error && caught.message.includes('repeat_after')
-}
-
-function eventToRow(event: GameEventConfig, position: number, includeRepeat: boolean): EventRow {
+function eventToRow(event: GameEventConfig, position: number, includeRepeat: boolean, includeMandatory: boolean): EventRow {
   const row: EventRow = {
     id: event.id,
     pool: event.type,
@@ -92,6 +102,7 @@ function eventToRow(event: GameEventConfig, position: number, includeRepeat: boo
     position,
   }
   if (includeRepeat) row.repeat_after = event.repeatAfter ?? null
+  if (includeMandatory) row.mandatory = event.mandatory === true
   return row
 }
 
@@ -108,6 +119,7 @@ function eventFromRow(row: EventRow): unknown {
     requiredClass: row.required_class,
     options: row.options,
     repeatAfter: row.repeat_after ?? undefined,
+    mandatory: row.mandatory === true,
   }
 }
 

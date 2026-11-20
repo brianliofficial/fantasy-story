@@ -164,8 +164,8 @@ function confirmMove(pool: string) {
             </button>
             <button type="button" class="pool-card-body" @click="emit('open', card.id)">
               <strong>{{ card.title || 'Untitled' }}</strong>
-              <span v-if="card.minAge == null && card.maxAge == null">Any age</span>
-              <span v-else>Age {{ card.minAge ?? 0 }}–{{ card.maxAge ?? MAX_AGE }}</span>
+              <span v-if="card.minAge == null && card.maxAge == null">Any age{{ card.mandatory ? ' · Mandatory' : '' }}</span>
+              <span v-else>Age {{ card.minAge ?? 0 }}–{{ card.maxAge ?? MAX_AGE }}{{ card.mandatory ? ' · Mandatory' : '' }}</span>
             </button>
             <div class="card-menu">
               <button type="button" class="icon-btn" :aria-label="`Duplicate ${card.title || 'Untitled'}`" @click="emit('duplicate', card.id)">

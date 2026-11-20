@@ -659,6 +659,35 @@ describe('fantasylife engine', () => {
     assert.match(quiet.log.at(-1)?.text ?? '', /without a notable tale/)
   })
 
+  it('shows a mandatory event when the age matches', () => {
+    const field: GameEventConfig = {
+      id: 'field',
+      type: 'Peasant',
+      title: 'Field',
+      description: 'A field.',
+      options: [{ id: 'stay', text: 'Stay', success: { log: 'You stay.', effect: {} } }],
+    }
+    const vow: GameEventConfig = {
+      id: 'vow',
+      type: 'Anytime',
+      title: 'Vow',
+      description: 'A vow.',
+      minAge: 8,
+      maxAge: 8,
+      mandatory: true,
+      options: [{ id: 'swear', text: 'Swear', success: { log: 'You swear.', effect: {} } }],
+    }
+    const early = ageUp({ ...born(), age: 6 }, [field, vow], defaultConfig(), zero)
+    assert.equal(early.age, 7)
+    assert.equal(early.pendingEvent?.id, 'field')
+    const due = ageUp({ ...born(), age: 7 }, [field, vow], defaultConfig(), zero)
+    assert.equal(due.age, 8)
+    assert.equal(due.pendingEvent?.id, 'vow')
+    const later = ageUp({ ...born(), age: 8 }, [field, vow], defaultConfig(), zero)
+    assert.equal(later.age, 9)
+    assert.equal(later.pendingEvent?.id, 'field')
+  })
+
   it('forces the teenage milestone and resolves study by class', () => {
     const config = defaultConfig()
     const schooling = { ...born(), age: 15, school: 'Reading', tutorRelationship: 81 }

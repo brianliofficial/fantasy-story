@@ -122,6 +122,7 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
   } else if (event.id === 'Anytime_event_001') {
     event.repeatAfter = 10
   }
+  if (value.mandatory === true) event.mandatory = true
   return event
 }
 
