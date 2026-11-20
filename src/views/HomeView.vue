@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGame } from '../composables/useGame'
 import { randomIdentity } from '../core/names'
 import { CLASSES, GENDERS, RACES, type Gender, type Race, type SocialClass } from '../core/types'
 
 const router = useRouter()
-const { life, config, start } = useGame()
+const { life, config, start, lastDeath } = useGame()
+const epitaph = computed(() => {
+  const death = lastDeath.value
+  if (!death) return ''
+  return `${death.name} died at age ${death.age}. ${death.reason}`
+})
 const forename = ref('')
 const surname = ref('')
 const gender = ref<Gender | ''>('')
@@ -57,6 +62,12 @@ function begin() {
   <main class="home">
     <form class="home-card" @submit.prevent="begin">
       <p class="badge">FantasyLife</p>
+      <div v-if="epitaph" class="death-marquee" role="status">
+        <div class="death-track">
+          <span>{{ epitaph }}</span>
+          <span aria-hidden="true">{{ epitaph }}</span>
+        </div>
+      </div>
       <h1>One tale</h1>
       <p>Live a fantasy life, year by year. The events and prices can be changed from the ledger.</p>
       <section v-if="life" class="card">
@@ -128,6 +139,42 @@ function begin() {
     font-size: clamp(2rem, 8vw, 2.6rem);
     color: #f5e7c6;
   }
+}
+
+.death-marquee {
+  overflow: hidden;
+  border: 1px solid #6e3a3a;
+  border-radius: 999px;
+  background: #1a100e;
+  color: #e7b2b2;
+  padding: 6px 0;
+}
+
+.death-track {
+  display: flex;
+  width: max-content;
+  animation: death-scroll 16s linear infinite;
+
+  span {
+    padding-right: 3rem;
+    white-space: nowrap;
+    font-size: 0.92rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .death-marquee { padding: 6px 12px; }
+  .death-track {
+    animation: none;
+    width: auto;
+    span:last-child { display: none; }
+    span { white-space: normal; padding-right: 0; }
+  }
+}
+
+@keyframes death-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 .name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

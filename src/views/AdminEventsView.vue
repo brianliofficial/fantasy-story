@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import EventBoard from '../components/EventBoard.vue'
 import EventCardForm from '../components/EventCardForm.vue'
 import { useGame } from '../composables/useGame'
 import { cloneData } from '../core/clone'
 import { blankEvent } from '../core/defaults'
 import { saveEventLedger, supabaseConfigured } from '../core/ledger'
+import { POOL_HISTORY_KEY, readPoolHistory, rememberSnapshot, type PoolSnapshot } from '../core/poolHistory'
 import { appendEvent, duplicateEvent, moveEvent } from '../core/pools'
 import { eventPoolWorkbook, readEventPoolWorkbook } from '../core/spreadsheet'
 import type { GameEventConfig } from '../core/types'
@@ -15,6 +16,9 @@ const { events, pools, saveEvents, savePools, ledgerNotice, refreshLedger, ledge
 const editing = ref<GameEventConfig | null>(null)
 const error = ref('')
 const pendingDelete = ref('')
+const pendingCard = ref('')
+const historyOpen = ref(false)
+const history = ref<PoolSnapshot[]>(readPoolHistory(localStorage.getItem(POOL_HISTORY_KEY)))
 const incoming = ref<{ events: GameEventConfig[]; pools: string[] } | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const notice = ref<{ ok: boolean; text: string; label: string } | null>(null)
@@ -24,10 +28,33 @@ let uploadQueue = Promise.resolve()
 let writes = 0
 let pollTimer = 0
 
+const pendingDeleteCount = computed(() => events.value.filter((event) => event.type === pendingDelete.value).length)
+const pendingCardTitle = computed(() => events.value.find((event) => event.id === pendingCard.value)?.title.trim() || 'Untitled')
+
+function remember(reason: string) {
+  const next = rememberSnapshot(history.value, events.value, pools.value, reason)
+  if (next === history.value) return
+  history.value = next
+  localStorage.setItem(POOL_HISTORY_KEY, JSON.stringify(next))
+}
+
+function savedWhen(savedAt: number) {
+  return new Date(savedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+function showNotice(ok: boolean, text: string, label = ok ? 'Saved' : 'Not saved') {
+  notice.value = { ok, text, label }
+  window.clearTimeout(noticeTimer)
+  noticeTimer = window.setTimeout(() => {
+    notice.value = null
+  }, 6000)
+}
+
 watch(ledgerNotice, (value) => {
   if (!value) return
   const label = value.ok ? (value.text.startsWith('Event pool loaded') ? 'Loaded' : 'Saved') : 'Not saved'
   showNotice(value.ok, value.text, label)
+  if (value.ok && value.text.startsWith('Event pool loaded')) remember('Auto save')
   armPoll()
 }, { immediate: true })
 
@@ -72,14 +99,6 @@ function change(event: GameEventConfig) {
   editing.value = event
 }
 
-function showNotice(ok: boolean, text: string, label = ok ? 'Saved' : 'Not saved') {
-  notice.value = { ok, text, label }
-  window.clearTimeout(noticeTimer)
-  noticeTimer = window.setTimeout(() => {
-    notice.value = null
-  }, 6000)
-}
-
 function upload(nextEvents: GameEventConfig[], nextPools: string[], title: string) {
   const stamp = ledgerStamp()
   const count = `${nextEvents.length} event${nextEvents.length === 1 ? '' : 's'} are set`
@@ -110,6 +129,7 @@ function save(event: GameEventConfig) {
     editing.value = event
     return
   }
+  remember(`Before saving ${event.title.trim() || 'Untitled'}`)
   saveEvents(appendEvent(events.value, event))
   editing.value = null
   error.value = ''
@@ -117,7 +137,20 @@ function save(event: GameEventConfig) {
 }
 
 function remove(id: string) {
-  saveEvents(events.value.filter((item: { id: string }) => item.id !== id))
+  if (!events.value.some((item) => item.id === id)) return
+  pendingCard.value = id
+}
+
+function confirmRemoveCard() {
+  const id = pendingCard.value
+  const source = events.value.find((item) => item.id === id)
+  if (!source) {
+    pendingCard.value = ''
+    return
+  }
+  remember(`Before deleting ${source.title.trim() || 'Untitled'}`)
+  saveEvents(events.value.filter((item) => item.id !== id))
+  pendingCard.value = ''
   editing.value = null
   upload(events.value, pools.value, 'Event')
 }
@@ -125,28 +158,27 @@ function remove(id: string) {
 function duplicate(id: string) {
   const source = events.value.find((item) => item.id === id)
   if (!source) return
+  remember(`Before duplicating ${source.title.trim() || 'Untitled'}`)
   saveEvents(duplicateEvent(events.value, id))
   upload(events.value, pools.value, `${source.title.trim() || 'Event'} copy`)
 }
 
 function move(id: string, pool: string, index: number) {
+  const source = events.value.find((item) => item.id === id)
+  if (!source) return
+  remember(`Before moving ${source.title.trim() || 'Untitled'}`)
   saveEvents(moveEvent(events.value, id, pool, index))
   upload(events.value, pools.value, 'Event pool')
 }
 
 function addPool(name: string) {
+  remember(`Before adding ${name}`)
   savePools([...pools.value, name])
   upload(events.value, pools.value, 'Pool')
 }
 
 function removePool(pool: string) {
-  const count = events.value.filter((event) => event.type === pool).length
-  if (count > 0) {
-    pendingDelete.value = pool
-    return
-  }
-  savePools(pools.value.filter((item) => item !== pool))
-  upload(events.value, pools.value, 'Pool')
+  pendingDelete.value = pool
 }
 
 function exportExcel() {
@@ -181,6 +213,7 @@ async function stageImport(event: Event) {
 function confirmImport() {
   const next = incoming.value
   if (!next) return
+  remember('Before replacing the event pool')
   saveEvents(next.events)
   savePools(next.pools)
   incoming.value = null
@@ -190,11 +223,22 @@ function confirmImport() {
 
 function confirmRemovePool() {
   const pool = pendingDelete.value
+  if (!pool) return
+  remember(`Before deleting ${pool}`)
   saveEvents(events.value.filter((event) => event.type !== pool))
   savePools(pools.value.filter((item) => item !== pool))
   pendingDelete.value = ''
   if (editing.value?.type === pool) editing.value = null
   upload(events.value, pools.value, 'Pool')
+}
+
+function restoreSnapshot(snapshot: PoolSnapshot) {
+  remember('Before restoring a saved copy')
+  saveEvents(cloneData(snapshot.events))
+  savePools([...snapshot.pools])
+  historyOpen.value = false
+  if (editing.value) editing.value = null
+  upload(events.value, pools.value, 'Event pool')
 }
 
 </script>
@@ -204,6 +248,7 @@ function confirmRemovePool() {
     <header class="admin-head">
       <h1>Event pool</h1>
       <nav class="admin-links">
+        <button type="button" class="text-link" @click="historyOpen = true">Event pool history</button>
         <button type="button" class="text-link" @click="exportExcel">Export Excel</button>
         <button type="button" class="text-link" @click="fileInput?.click()">Import Excel</button>
         <input ref="fileInput" class="sr-only" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="stageImport" />
@@ -247,13 +292,42 @@ function confirmRemovePool() {
         </div>
       </section>
     </div>
-    <div v-if="pendingDelete" class="modal-backdrop" @click.self="pendingDelete = ''">
+    <div v-if="historyOpen" class="modal-backdrop">
+      <section class="modal history-dialog" role="dialog" aria-modal="true" aria-labelledby="pool-history-title">
+        <h2 id="pool-history-title">Event pool history</h2>
+        <p>The last five automatic copies. Restore one if a pool was deleted.</p>
+        <div v-if="history.length === 0" class="hint">No copies yet. A copy is kept before each change.</div>
+        <div v-else class="history-list">
+          <article v-for="snapshot in history" :key="snapshot.id" class="history-row">
+            <div>
+              <strong>{{ savedWhen(snapshot.savedAt) }}</strong>
+              <p>{{ snapshot.reason }}</p>
+              <p>{{ snapshot.events.length }} event{{ snapshot.events.length === 1 ? '' : 's' }} · {{ snapshot.pools.join(', ') }}</p>
+            </div>
+            <button type="button" class="btn" @click="restoreSnapshot(snapshot)">Restore</button>
+          </article>
+        </div>
+        <button type="button" class="btn" @click="historyOpen = false">Close</button>
+      </section>
+    </div>
+    <div v-if="pendingDelete" class="modal-backdrop">
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-pool-title">
         <h2 id="delete-pool-title">Delete {{ pendingDelete }}?</h2>
-        <p>The events in this pool will be deleted too.</p>
+        <p v-if="pendingDeleteCount === 0">This pool has no events. Press Confirm to delete it.</p>
+        <p v-else>This pool and its {{ pendingDeleteCount }} event{{ pendingDeleteCount === 1 ? '' : 's' }} will be deleted. Press Confirm to delete it.</p>
         <div class="choice-row">
           <button type="button" class="btn" @click="pendingDelete = ''">Cancel</button>
-          <button type="button" class="btn btn-danger" @click="confirmRemovePool">Delete</button>
+          <button type="button" class="btn btn-danger" @click="confirmRemovePool">Confirm</button>
+        </div>
+      </section>
+    </div>
+    <div v-if="pendingCard" class="modal-backdrop">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-card-title">
+        <h2 id="delete-card-title">Delete {{ pendingCardTitle }}?</h2>
+        <p>Press Confirm to delete this event.</p>
+        <div class="choice-row">
+          <button type="button" class="btn" @click="pendingCard = ''">Cancel</button>
+          <button type="button" class="btn btn-danger" @click="confirmRemoveCard">Confirm</button>
         </div>
       </section>
     </div>
@@ -305,6 +379,32 @@ function confirmRemovePool() {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.history-dialog {
+  width: min(100%, 560px);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(50dvh, 420px);
+  overflow: auto;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+
+  strong { display: block; color: #e8c77b; }
+  p { margin: 2px 0 0; color: var(--muted); font-size: 0.92rem; }
+  .btn { flex: none; }
 }
 
 .modal-x {

@@ -40,6 +40,7 @@ import type {
 } from '../core/types'
 
 const LIFE_KEY = 'fantasylife.life'
+const LAST_DEATH_KEY = 'fantasylife.lastDeath'
 const CONFIG_KEY = 'fantasylife.config'
 const RETIRED_EVENT_KEYS = ['fantasylife.events', 'fantasylife.pools']
 
@@ -91,7 +92,14 @@ export interface GameStore {
   saveConfig: (config: GameConfig) => void
   resetConfig: () => void
   forgetLife: () => void
+  lastDeath: Ref<LastDeath | null>
   ledgerNotice: Ref<{ ok: boolean; text: string } | null>
+}
+
+interface LastDeath {
+  name: string
+  age: number
+  reason: string
 }
 
 const gameKey: InjectionKey<GameStore> = Symbol('fantasylife')
@@ -100,6 +108,7 @@ export function provideGame(): GameStore {
   for (const key of RETIRED_EVENT_KEYS) localStorage.removeItem(key)
   const savedLife = sanitizeLife(read(LIFE_KEY))
   const life = ref<Life | null>(savedLife)
+  const lastDeath = ref<LastDeath | null>(deathOf(savedLife) ?? readLastDeath(read(LAST_DEATH_KEY)))
   const events = ref<GameEventConfig[]>([])
   const pools = ref<string[]>([])
   const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
@@ -111,6 +120,10 @@ export function provideGame(): GameStore {
   watch(life, (value) => {
     if (value) write(LIFE_KEY, value)
     else localStorage.removeItem(LIFE_KEY)
+    const death = deathOf(value)
+    if (!death) return
+    lastDeath.value = death
+    write(LAST_DEATH_KEY, death)
   }, { deep: true })
   watch(config, (value) => write(CONFIG_KEY, value), { deep: true })
 
@@ -247,6 +260,7 @@ export function provideGame(): GameStore {
     forgetLife() {
       life.value = null
     },
+    lastDeath,
   }
 
   provide(gameKey, store)
@@ -273,6 +287,22 @@ export function provideGame(): GameStore {
       }
     }
   }
+}
+
+function deathOf(life: Life | null): LastDeath | null {
+  if (!life || life.alive) return null
+  const reason = life.deathReason?.trim()
+  if (!reason) return null
+  return { name: life.name, age: life.age, reason }
+}
+
+function readLastDeath(value: unknown): LastDeath | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Partial<LastDeath>
+  if (typeof record.name !== 'string' || !record.name.trim()) return null
+  if (typeof record.reason !== 'string' || !record.reason.trim()) return null
+  if (typeof record.age !== 'number' || !Number.isFinite(record.age)) return null
+  return { name: record.name.trim(), age: Math.max(0, Math.round(record.age)), reason: record.reason.trim() }
 }
 
 export function useGame(): GameStore {
