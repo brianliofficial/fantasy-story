@@ -11,6 +11,7 @@ const emit = defineEmits<{ change: [event: GameEventConfig]; save: [event: GameE
 
 const effectKeys = ['constitution', 'charisma', 'intelligence', 'gold', 'parentRelationship'] as const
 const optionIndex = ref(0)
+const pendingOption = ref<number | null>(null)
 const logSide = ref<'success' | 'failure'>('success')
 const effectDrafts = ref<Record<string, string>>({})
 
@@ -68,8 +69,15 @@ function addOption() {
   update({ options })
 }
 
-function deleteOptionAt(index: number) {
+function askDeleteOption(index: number) {
   if (props.event.options.length <= 1) return
+  pendingOption.value = index
+}
+
+function confirmDeleteOption() {
+  const index = pendingOption.value
+  pendingOption.value = null
+  if (index == null || props.event.options.length <= 1) return
   const options = props.event.options.filter((_, itemIndex) => itemIndex !== index)
   if (optionIndex.value >= options.length) optionIndex.value = options.length - 1
   else if (index < optionIndex.value) optionIndex.value -= 1
@@ -280,7 +288,7 @@ const poolBand = computed(() => agePoolFor(props.event.type))
           class="tab-x"
           :aria-label="`Remove option ${index + 1}`"
           :disabled="event.options.length <= 1"
-          @click.stop="deleteOptionAt(index)"
+          @click.stop="askDeleteOption(index)"
         >×</button>
       </div>
       <button type="button" class="tab-plus" aria-label="Add option" :disabled="event.options.length >= 4" @click="addOption">+</button>
@@ -344,6 +352,18 @@ const poolBand = computed(() => agePoolFor(props.event.type))
       <button type="button" class="btn btn-primary" @click="emit('save', event)">Save card</button>
       <button type="button" class="btn btn-danger" @click="emit('remove', event.id)">Delete</button>
     </div>
+    <Teleport to="body">
+      <div v-if="pendingOption != null" class="modal-backdrop">
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-option-title">
+          <h2 id="delete-option-title">Delete Option {{ pendingOption + 1 }}?</h2>
+          <p>Press Confirm to delete this option.</p>
+          <div class="choice-row">
+            <button type="button" class="btn" @click="pendingOption = null">Cancel</button>
+            <button type="button" class="btn btn-danger" @click="confirmDeleteOption">Confirm</button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
   </article>
 </template>
 
