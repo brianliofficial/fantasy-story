@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import { ledgerPools } from './pools'
-import { sanitizeEvent } from './sanitize'
+import { optionsForSave, sanitizeEvent } from './sanitize'
 import type { GameEventConfig } from './types'
 
 const EVENT_HEADERS = ['id', 'pool', 'title', 'description', 'minAge', 'maxAge', 'showLimit', 'repeatAfter', 'mandatory', 'requiredRace', 'requiredClass', 'options'] as const
@@ -56,7 +56,7 @@ function eventToRow(event: GameEventConfig): Record<string, string | number> {
     mandatory: event.mandatory ? 'true' : '',
     requiredRace: (event.requiredRace ?? []).join(', '),
     requiredClass: (event.requiredClass ?? []).join(', '),
-    options: JSON.stringify(event.options),
+    options: JSON.stringify(optionsForSave(event)),
   }
 }
 

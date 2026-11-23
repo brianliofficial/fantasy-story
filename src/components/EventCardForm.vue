@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { agePoolFor } from '../core/age'
 import { uid } from '../core/id'
 import { cloneData } from '../core/clone'
-import type { CheckStat, EventOption, GameEventConfig, Race, SocialClass, StatChange } from '../core/types'
-import { CHECK_STATS, CLASSES, RACES } from '../core/types'
+import type { CheckStat, EventOption, GameEventConfig, HeirRole, KinRole, Race, SocialClass, StatChange } from '../core/types'
+import { CHECK_STATS, CLASSES, HEIR_ROLES, KIN_ROLES, RACES } from '../core/types'
 
 const props = defineProps<{ event: GameEventConfig; error?: string; pools: string[] }>()
 const emit = defineEmits<{ change: [event: GameEventConfig]; save: [event: GameEventConfig]; remove: [id: string] }>()
@@ -154,11 +154,30 @@ function setRepeatAfter(raw: string) {
 }
 
 const goldMode = ref<Record<string, boolean>>({})
+const checkMode = ref<Record<string, 'work' | 'race'>>({})
+
+const eventCopy = computed(() => [
+  props.event.title,
+  props.event.description,
+  ...props.event.options.flatMap((option) => [option.text, option.success.log, option.failure?.log ?? '']),
+].join('\n'))
+const hasKinName = computed(() => /\[(mother|father|brother|sister|sibling|friend)(?:_job)?\]/i.test(eventCopy.value))
+const hasKinDeath = computed(() => /\[(mother|father|brother|sister|sibling|friend|wholefamily)_die\]/i.test(eventCopy.value))
 
 function checkValue(option: EventOption): string {
+  const mode = checkMode.value[option.id]
+  if (mode === 'work' || option.workWith) return 'work'
+  if (mode === 'race' || option.setAge != null || option.setRace || option.setClass) return 'race'
   if (goldMode.value[option.id] || option.goldCost != null) return 'gold'
   if (option.checkLuck) return 'luck'
   return option.checkStat ?? ''
+}
+
+function rememberMode(optionId: string, mode?: 'work' | 'race') {
+  const next = { ...checkMode.value }
+  if (mode) next[optionId] = mode
+  else delete next[optionId]
+  checkMode.value = next
 }
 
 function setGoldCost(optionId: string, raw: string) {
@@ -175,15 +194,42 @@ function setCheck(optionId: string, value: string) {
   const option = props.event.options.find((item) => item.id === optionId)
   if (!option) return
   const failure = option.failure ?? { log: '', effect: {} }
+  const cleared = {
+    checkLuck: undefined,
+    checkStat: undefined,
+    goldCost: undefined,
+    workWith: undefined,
+    setAge: undefined,
+    setRace: undefined,
+    setClass: undefined,
+  }
   if (value === 'gold') {
     goldMode.value = { ...goldMode.value, [optionId]: true }
-    updateOption(optionId, {
-      goldCost: undefined,
-      checkLuck: undefined,
-      checkStat: undefined,
-    })
+    rememberMode(optionId)
+    updateOption(optionId, cleared)
     return
   }
+  if (value === 'work') {
+    rememberMode(optionId, 'work')
+    if (goldMode.value[optionId]) {
+      const next = { ...goldMode.value }
+      delete next[optionId]
+      goldMode.value = next
+    }
+    updateOption(optionId, cleared)
+    return
+  }
+  if (value === 'race') {
+    rememberMode(optionId, 'race')
+    if (goldMode.value[optionId]) {
+      const next = { ...goldMode.value }
+      delete next[optionId]
+      goldMode.value = next
+    }
+    updateOption(optionId, cleared)
+    return
+  }
+  rememberMode(optionId)
   if (goldMode.value[optionId]) {
     const next = { ...goldMode.value }
     delete next[optionId]
@@ -191,25 +237,51 @@ function setCheck(optionId: string, value: string) {
   }
   if (value === 'luck') {
     updateOption(optionId, {
+      ...cleared,
       checkLuck: true,
-      checkStat: undefined,
-      goldCost: undefined,
       threshold: option.threshold ?? 50,
       failure,
     })
     return
   }
   if (!value) {
-    updateOption(optionId, { checkLuck: undefined, checkStat: undefined, goldCost: undefined })
+    updateOption(optionId, cleared)
     return
   }
   updateOption(optionId, {
-    checkLuck: undefined,
+    ...cleared,
     checkStat: value as CheckStat,
-    goldCost: undefined,
     threshold: option.threshold ?? 50,
     failure,
   })
+}
+
+function setWorkWith(optionId: string, value: string) {
+  updateOption(optionId, { workWith: KIN_ROLES.includes(value as KinRole) ? value as KinRole : undefined })
+}
+
+function setIdentityAge(optionId: string, raw: string) {
+  if (raw.trim() === '') {
+    updateOption(optionId, { setAge: undefined })
+    return
+  }
+  if (!/^\d+$/.test(raw.trim())) return
+  updateOption(optionId, { setAge: Math.min(120, Number(raw)) })
+}
+
+function toggleKin(key: 'nameStandIn' | 'heirs', role: HeirRole) {
+  const current = props.event[key] ?? []
+  const next = current.includes(role) ? current.filter((item) => item !== role) : [...current, role]
+  update({ [key]: next.length > 0 ? next : undefined })
+}
+
+const heirChoices = computed(() => HEIR_ROLES.filter((role) => !props.event.heirs?.includes(role)))
+
+function addHeir(raw: string) {
+  if (!HEIR_ROLES.includes(raw as HeirRole)) return
+  const role = raw as HeirRole
+  if (props.event.heirs?.includes(role)) return
+  update({ heirs: [...(props.event.heirs ?? []), role] })
 }
 
 const poolOptions = computed(() => (
@@ -269,6 +341,13 @@ const poolBand = computed(() => agePoolFor(props.event.type))
     <label class="field">Event
       <textarea :value="event.description" rows="4" maxlength="600" @input="update({ description: ($event.target as HTMLTextAreaElement).value })" />
     </label>
+    <section v-if="hasKinName">
+      <p class="hint">If that character does not exist, use one of these people instead.</p>
+      <div class="toggle-row">
+        <button v-for="role in HEIR_ROLES" :key="`stand-${role}`" type="button" class="pill" :class="{ 'is-selected': event.nameStandIn?.includes(role) }" @click="toggleKin('nameStandIn', role)">{{ role }}</button>
+      </div>
+      <p class="hint">If none of them exist, a random person is shown.</p>
+    </section>
     <div class="tab-set">
     <div class="tab-bar" role="tablist" aria-label="Options">
       <div
@@ -304,24 +383,51 @@ const poolBand = computed(() => agePoolFor(props.event.type))
             <option value="">None</option>
             <option value="luck">Luck</option>
             <option value="gold">gold</option>
+            <option value="work">work with</option>
+            <option value="race">race changed</option>
             <option v-for="stat in CHECK_STATS" :key="stat" :value="stat">{{ stat }}</option>
           </select>
         </label>
         <label v-if="checkValue(current) === 'gold'" class="field">Gold cost
           <input :value="current.goldCost ?? ''" type="number" min="1" max="100000" @input="setGoldCost(current.id, ($event.target as HTMLInputElement).value)" />
         </label>
+        <label v-if="checkValue(current) === 'work'" class="field">Relationship
+          <select :value="current.workWith ?? ''" @change="setWorkWith(current.id, ($event.target as HTMLSelectElement).value)">
+            <option value="">Choose</option>
+            <option v-for="role in KIN_ROLES" :key="role" :value="role">{{ role }}</option>
+          </select>
+        </label>
+        <template v-if="checkValue(current) === 'race'">
+          <label class="field">Age
+            <input :value="current.setAge ?? ''" type="number" min="0" max="120" placeholder="Keep" @input="setIdentityAge(current.id, ($event.target as HTMLInputElement).value)" />
+          </label>
+          <label class="field">Race
+            <select :value="current.setRace ?? ''" @change="updateOption(current.id, { setRace: RACES.includes(($event.target as HTMLSelectElement).value as Race) ? ($event.target as HTMLSelectElement).value as Race : undefined })">
+              <option value="">Keep</option>
+              <option v-for="race in RACES" :key="race" :value="race">{{ race }}</option>
+            </select>
+          </label>
+          <label class="field">Class
+            <select :value="current.setClass ?? ''" @change="updateOption(current.id, { setClass: CLASSES.includes(($event.target as HTMLSelectElement).value as SocialClass) ? ($event.target as HTMLSelectElement).value as SocialClass : undefined })">
+              <option value="">Keep</option>
+              <option v-for="item in CLASSES" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+        </template>
         <label v-if="current.checkStat || current.checkLuck" class="field">Threshold
           <input :value="current.threshold ?? 50" type="number" min="0" max="100" @input="updateOption(current.id, { threshold: Number(($event.target as HTMLInputElement).value) })" />
         </label>
       </div>
       <p v-if="checkValue(current) === 'gold'" class="hint">The player pays this gold to choose the option. It stays grey when they cannot afford it.</p>
+      <p v-if="checkValue(current) === 'work'" class="hint">Your job becomes the same as that person's job.</p>
+      <p v-if="checkValue(current) === 'race'" class="hint">Choosing this option changes the age, race, and class filled in here. Leave one as Keep to leave it alone.</p>
       <p v-if="current.checkLuck" class="hint">Rolls 0–100. No attribute is added. Success when the roll reaches the threshold.</p>
       <div class="tab-set">
       <div class="tab-bar" role="tablist" aria-label="Outcome logs">
         <button type="button" class="tab" role="tab" :aria-selected="logSide === 'success'" :class="{ 'is-selected': logSide === 'success' }" @click="logSide = 'success'">Success log</button>
         <button v-if="hasCheck" type="button" class="tab" role="tab" :aria-selected="logSide === 'failure'" :class="{ 'is-selected': logSide === 'failure' }" @click="logSide = 'failure'">Failure log</button>
       </div>
-      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and that character's name is shown instead. Write [mother_die] when that person dies. [father_die], [brother_die], [sister_die], [sibling_die], and [friend_die] follow the same rule.</p>
+      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and that character's name is shown instead. Write [mother_job] and the mother's trade is shown. [father_job], [brother_job], [sister_job], [sibling_job], and [friend_job] follow the same rule. Write [mother_die] when that person dies. [father_die], [brother_die], [sister_die], [sibling_die], and [friend_die] follow the same rule.</p>
       <div class="tab-panel log-panel">
       <template v-if="logSide === 'success'">
         <label class="field">Success log
@@ -347,6 +453,22 @@ const poolBand = computed(() => agePoolFor(props.event.type))
       </div>
     </section>
     </div>
+    <section v-if="hasKinDeath" class="heir-block">
+      <p class="hint">Who inherits this character's wealth?</p>
+      <label v-if="heirChoices.length > 0" class="field">Heir
+        <select value="" @change="addHeir(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
+          <option value="">Choose</option>
+          <option v-for="role in heirChoices" :key="role" :value="role">{{ role }}</option>
+        </select>
+      </label>
+      <div v-if="event.heirs?.length" class="tag-row">
+        <span v-for="role in event.heirs" :key="role" class="heir-tag">
+          {{ role }}
+          <button type="button" :aria-label="`Remove ${role}`" @click="toggleKin('heirs', role)">×</button>
+        </span>
+      </div>
+      <p class="hint">The wealth is split into one share for each person you choose. Shares with nobody to take them come to you. If none of them exist, you inherit it.</p>
+    </section>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <div class="choice-row">
       <button type="button" class="btn btn-primary" @click="emit('save', event)">Save card</button>
@@ -472,4 +594,33 @@ const poolBand = computed(() => agePoolFor(props.event.type))
 }
 
 .effect-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+.heir-block { display: flex; flex-direction: column; gap: 8px; }
+
+.tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.heir-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 8px 4px 14px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: #1b1511;
+  font-family: Cinzel, Georgia, serif;
+  font-weight: 700;
+
+  button {
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+  }
+}
 </style>

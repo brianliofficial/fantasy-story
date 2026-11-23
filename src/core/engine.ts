@@ -7,6 +7,7 @@ import {
   payCap,
   raiseStep,
   resolveTrade,
+  salaryFor,
   subjectsFor,
   TEACHER_JOBS,
   TEACHER_SUBJECTS,
@@ -27,7 +28,9 @@ import type {
   GameConfig,
   GameEventConfig,
   Gender,
+  HeirRole,
   InfantAction,
+  KinRole,
   Life,
   LogEntry,
   NewCharacter,
@@ -395,12 +398,14 @@ export function chooseOption(
   const paid = cost > 0 ? { ...life, gold: life.gold - cost } : life
   let next = applyEffect(paid, outcome.effect)
   if (option.clearHouse) next = { ...next, house: null }
-  const told = applyOutcomeLog(next, outcome.log, random)
+  next = applyWorkWith(next, option.workWith, life.pendingEvent.nameStandIn ?? [], random)
+  next = applyIdentity(next, option)
+  const told = applyOutcomeLog(next, outcome.log, random, life.pendingEvent.nameStandIn ?? [], life.pendingEvent.heirs ?? [])
   next = {
     ...told.life,
     pendingEvent: null,
     pendingOutcome: {
-      title: nameKin(passed ? life.pendingEvent.title : 'It goes badly', next, random),
+      title: nameKin(passed ? life.pendingEvent.title : 'It goes badly', next, random, life.pendingEvent.nameStandIn ?? []),
       log: told.text,
       passed,
       roll,
@@ -584,23 +589,91 @@ function standInName(life: Life, blocked: Set<string>, random: () => number): st
   return pool[randomInt(random, 0, pool.length - 1)]?.name
 }
 
-export function nameKin(text: string, life: Life, random: () => number = Math.random): string {
-  return text.replace(/\[(mother|father|brother|sister|sibling|friend)\]/gi, (mark, who: string) => {
+function kinMatches(life: Life, kind: string): Person[] {
+  return life.people.filter((person) => matchesKin(person, kind))
+}
+
+function pickKin(people: Person[], kind: string, random: () => number): Person | undefined {
+  if (people.length === 0) return undefined
+  if (kind === 'mother' || kind === 'father') return people[0]
+  return people[randomInt(random, 0, people.length - 1)]
+}
+
+function livingFirst(people: Person[]): Person[] {
+  const living = people.filter((person) => person.alive)
+  return living.length > 0 ? living : people
+}
+
+function standInPerson(life: Life, standIn: HeirRole[], random: () => number): Person | undefined {
+  if (standIn.length === 0) return undefined
+  for (const role of standIn) {
+    const found = pickKin(livingFirst(kinMatches(life, role)), role, random)
+    if (found) return found
+  }
+  if (life.people.length === 0) return undefined
+  return pickKin(livingFirst(life.people), 'friend', random)
+}
+
+function kinPerson(life: Life, kind: string, random: () => number, standIn: HeirRole[]): Person | undefined {
+  const matches = kinMatches(life, kind)
+  const living = matches.filter((person) => person.alive)
+  if (living.length > 0) return pickKin(living, kind, random)
+  if (matches.length > 0) return undefined
+  if (standIn.length === 0) return undefined
+  return standInPerson(life, standIn, random)
+}
+
+export function nameKin(text: string, life: Life, random: () => number = Math.random, standIn: HeirRole[] = []): string {
+  const withJobs = text.replace(/\[(mother|father|brother|sister|sibling|friend)_job\]/gi, (mark, who: string) => {
     const kind = who.toLowerCase()
-    const matches = life.people.filter((person) => matchesKin(person, kind))
+    const matches = kinMatches(life, kind)
+    const holder = pickKin(livingFirst(matches), kind, random) ?? (matches.length === 0 ? standInPerson(life, standIn, random) : undefined)
+    return holder?.occupation || mark
+  })
+  return withJobs.replace(/\[(mother|father|brother|sister|sibling|friend)\]/gi, (mark, who: string) => {
+    const kind = who.toLowerCase()
+    const matches = kinMatches(life, kind)
     const living = matches.filter((person) => person.alive)
     if (living.length > 0) {
-      const chosen = kind === 'mother' || kind === 'father'
-        ? living[0]
-        : living[randomInt(random, 0, living.length - 1)]
-      return chosen?.name ?? mark
+      return pickKin(living, kind, random)?.name ?? mark
     }
-    if (matches.length === 0) return mark
+    if (matches.length === 0) return kinPerson(life, kind, random, standIn)?.name ?? mark
     return standInName(life, new Set(matches.map((person) => person.id)), random) ?? matches[0]?.name ?? mark
   })
 }
 
-function applyOutcomeLog(life: Life, text: string, random: () => number): { life: Life; text: string } {
+function inheritance(life: Life, deaths: Set<string>, heirs: HeirRole[], random: () => number): { gold: number; note: string } {
+  if (heirs.length === 0 || deaths.size === 0) return { gold: 0, note: '' }
+  const estate = life.people
+    .filter((person) => deaths.has(person.id))
+    .reduce((sum, person) => sum + salaryFor(person.occupation ?? ''), 0)
+  if (estate <= 0) return { gold: 0, note: '' }
+  const base = Math.floor(estate / heirs.length)
+  let leftover = estate - base * heirs.length
+  let player = 0
+  const notes: string[] = []
+  heirs.forEach((role) => {
+    const person = pickKin(kinMatches(life, role).filter((item) => item.alive && !deaths.has(item.id)), role, random)
+    if (!person) {
+      player += base
+      return
+    }
+    const share = base + leftover
+    leftover = 0
+    notes.push(`${person.name} inherits ${share} gold`)
+  })
+  player += leftover
+  if (player > 0) notes.push(`You inherit ${player} gold`)
+  return { gold: player, note: notes.length > 0 ? `${notes.join('. ')}.` : '' }
+}
+
+function applyOutcomeLog(
+  life: Life,
+  text: string,
+  random: () => number,
+  standIn: HeirRole[] = [],
+  heirs: HeirRole[] = [],
+): { life: Life; text: string } {
   const deaths = new Set<string>()
   const resolved = nameKin(text.replace(/\[(mother|father|brother|sister|sibling|friend|wholefamily)_die\]/gi, (mark, token: string) => {
     const kind = token.toLowerCase()
@@ -615,13 +688,40 @@ function applyOutcomeLog(life: Life, text: string, random: () => number): { life
     if (!living) return standInRelative(life, deaths, random, matches[0], mark)
     deaths.add(living.id)
     return `${living.name} dies`
-  }), life, random)
-  if (deaths.size === 0) return { life, text: resolved }
+  }), life, random, standIn)
+  const willed = inheritance(life, deaths, heirs, random)
+  const told = willed.note ? `${resolved} ${willed.note}` : resolved
+  if (deaths.size === 0 && willed.gold === 0) return { life, text: told }
   const people = life.people.map((person) => (
     deaths.has(person.id) ? { ...person, alive: false, diedYearsAgo: 0 } : person
   ))
-  const next = { ...life, people }
-  return { life: { ...next, parentRelationship: averageParentScore(next) }, text: resolved }
+  const next = { ...life, people, gold: life.gold + willed.gold }
+  return { life: { ...next, parentRelationship: averageParentScore(next) }, text: told }
+}
+
+function applyWorkWith(life: Life, role: KinRole | undefined, standIn: HeirRole[], random: () => number): Life {
+  if (!role) return life
+  const matches = kinMatches(life, role)
+  const person = pickKin(livingFirst(matches), role, random) ?? (matches.length === 0 ? standInPerson(life, standIn, random) : undefined)
+  if (!person?.occupation) return life
+  const known = salaryFor(person.occupation)
+  return {
+    ...life,
+    occupation: { title: person.occupation, salary: known || life.occupation?.salary || 0 },
+  }
+}
+
+function applyIdentity(life: Life, option: EventOption): Life {
+  const age = option.setAge
+  const race = option.setRace
+  const socialClass = option.setClass
+  if (age == null && !race && !socialClass) return life
+  return {
+    ...life,
+    ...(age == null ? {} : { age: Math.max(0, Math.min(MAX_AGE, age)) }),
+    ...(race ? { race } : {}),
+    ...(socialClass ? { socialClass } : {}),
+  }
 }
 
 export function yearActivity(life: Life, activity: YearActivity, random: () => number = Math.random): Life {

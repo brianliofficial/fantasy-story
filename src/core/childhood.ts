@@ -98,6 +98,11 @@ export function article(word: string): 'a' | 'an' {
   return /^[aeiou]/i.test(word) ? 'an' : 'a'
 }
 
+export function salaryFor(title: string): number {
+  const trades = [...PEASANT_TRADES, ...JOURNEYMAN_TRADES, ...MERCHANT_TRADES, ...NOBLE_TRADES]
+  return trades.find((trade) => trade.parent === title || trade.child === title)?.salary ?? 0
+}
+
 export function resolveTrade(socialClass: SocialClass, occupation?: string): Trade {
   const trades = tradesFor(socialClass)
   const found = trades.find((trade) => trade.parent === occupation || trade.child === occupation)

@@ -1,5 +1,5 @@
 import { POOL_HISTORY_LIMIT, readPoolHistory, type PoolSnapshot } from './poolHistory'
-import { sanitizeEvents } from './sanitize'
+import { optionsForSave, sanitizeEvents } from './sanitize'
 import type { GameEventConfig } from './types'
 
 interface EventRow {
@@ -98,7 +98,7 @@ function eventToRow(event: GameEventConfig, position: number, includeRepeat: boo
     show_limit: event.showLimit ?? null,
     required_race: event.requiredRace ?? [],
     required_class: event.requiredClass ?? [],
-    options: event.options,
+    options: optionsForSave(event),
     position,
   }
   if (includeRepeat) row.repeat_after = event.repeatAfter ?? null

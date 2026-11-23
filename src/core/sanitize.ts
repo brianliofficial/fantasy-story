@@ -4,6 +4,8 @@ import { cleanNamePart, parseNameList } from './names'
 import type {
   CheckStat,
   EventOption,
+  HeirRole,
+  KinRole,
   GameConfig,
   GameEventConfig,
   AgeWindow,
@@ -23,7 +25,7 @@ import type {
   StatChange,
   YearActivity,
 } from './types'
-import { CHECK_STATS, CLASSES, MAX_AGE, RACES } from './types'
+import { CHECK_STATS, CLASSES, HEIR_ROLES, KIN_ROLES, MAX_AGE, RACES } from './types'
 
 function isRace(value: unknown): value is Race {
   return RACES.includes(value as Race)
@@ -31,6 +33,20 @@ function isRace(value: unknown): value is Race {
 
 function isClass(value: unknown): value is SocialClass {
   return CLASSES.includes(value as SocialClass)
+}
+
+function isKinRole(value: unknown): value is KinRole {
+  return KIN_ROLES.includes(value as KinRole)
+}
+
+function isHeirRole(value: unknown): value is HeirRole {
+  return HEIR_ROLES.includes(value as HeirRole)
+}
+
+function heirList(value: unknown): HeirRole[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const roles = [...new Set(value.filter(isHeirRole))]
+  return roles.length > 0 ? roles : undefined
 }
 
 function isCheckStat(value: unknown): value is CheckStat {
@@ -75,6 +91,11 @@ function sanitizeOption(value: unknown): EventOption | null {
   if (typeof value.goldCost === 'number' && Number.isFinite(value.goldCost) && value.goldCost > 0) {
     option.goldCost = Math.max(1, Math.min(100000, Math.round(value.goldCost)))
   }
+  if (isKinRole(value.workWith)) option.workWith = value.workWith
+  const age = readAge(value.setAge)
+  if (typeof age === 'number') option.setAge = age
+  if (isRace(value.setRace)) option.setRace = value.setRace
+  if (isClass(value.setClass)) option.setClass = value.setClass
   if (value.clearHouse === true) option.clearHouse = true
   if (typeof value.threshold === 'number' && Number.isFinite(value.threshold)) {
     option.threshold = Math.max(0, Math.min(100, Math.round(value.threshold)))
@@ -93,6 +114,7 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
   if (minAge === null || maxAge === null) return null
   if (minAge != null && maxAge != null && minAge > maxAge) return null
   if (!Array.isArray(value.options)) return null
+  const firstOption = value.options.find(isRecord)
   const options = value.options.map(sanitizeOption).filter((option): option is EventOption => option !== null)
   if (options.length === 0) return null
   const event: GameEventConfig = {
@@ -126,7 +148,20 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
     event.repeatAfter = 10
   }
   if (value.mandatory === true) event.mandatory = true
+  const nameStandIn = heirList(value.nameStandIn) ?? heirList(firstOption?.nameStandIn)
+  const heirs = heirList(value.heirs) ?? heirList(firstOption?.heirs)
+  if (nameStandIn) event.nameStandIn = nameStandIn
+  if (heirs) event.heirs = heirs
   return event
+}
+
+export function optionsForSave(event: GameEventConfig): EventOption[] {
+  return event.options.map((option) => {
+    const stored = { ...option } as EventOption & { nameStandIn?: HeirRole[]; heirs?: HeirRole[] }
+    if (event.nameStandIn?.length) stored.nameStandIn = event.nameStandIn
+    if (event.heirs?.length) stored.heirs = event.heirs
+    return stored
+  })
 }
 
 export function sanitizeEvents(value: unknown): GameEventConfig[] | null {

@@ -4,11 +4,12 @@ import type { GameEventConfig, Life } from '../core/types'
 
 const props = defineProps<{ life: Life; event: GameEventConfig }>()
 const emit = defineEmits<{ choose: [optionId: string] }>()
-const title = nameKin(props.event.title, props.life)
-const description = nameKin(props.event.description, props.life)
+const standIn = props.event.nameStandIn ?? []
+const title = nameKin(props.event.title, props.life, Math.random, standIn)
+const description = nameKin(props.event.description, props.life, Math.random, standIn)
 const options = props.event.options.map((option) => ({
   id: option.id,
-  text: nameKin(option.text, props.life),
+  text: nameKin(option.text, props.life, Math.random, standIn),
   cost: option.goldCost ?? 0,
 }))
 function unaffordable(cost: number): boolean {

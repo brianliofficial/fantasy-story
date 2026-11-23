@@ -3,6 +3,8 @@ export type SocialClass = 'Peasant' | 'Journeyman' | 'Merchant' | 'Noble'
 export const DEFAULT_POOLS = ['Anytime', 'Infant', 'Child', 'Teenager', 'Adult', 'Peasant', 'Journeyman', 'Merchant', 'Noble', 'Elf', 'Milestone'] as const
 export type EventType = (typeof DEFAULT_POOLS)[number]
 export type CheckStat = 'constitution' | 'charisma' | 'intelligence'
+export type KinRole = 'mother' | 'father' | 'brother' | 'sister' | 'sibling' | 'friend'
+export type HeirRole = 'father' | 'mother' | 'brother' | 'sister'
 export type RelationRole = 'parent' | 'sibling' | 'friend' | 'teacher'
 export type MenuKey = 'infant' | 'childhood' | 'job' | 'school' | 'romance' | 'crime' | 'guild' | 'assets' | 'activities'
 export type Gender = 'male' | 'female'
@@ -26,6 +28,10 @@ export interface EventOption {
   checkStat?: CheckStat
   checkLuck?: boolean
   goldCost?: number
+  workWith?: KinRole
+  setAge?: number
+  setRace?: Race
+  setClass?: SocialClass
   clearHouse?: boolean
   threshold?: number
   success: {
@@ -50,6 +56,8 @@ export interface GameEventConfig {
   showLimit?: number
   repeatAfter?: number
   mandatory?: boolean
+  nameStandIn?: HeirRole[]
+  heirs?: HeirRole[]
   options: EventOption[]
 }
 
@@ -193,4 +201,6 @@ export const RACES: Race[] = ['Elf', 'Human', 'Dwarf']
 export const CLASSES: SocialClass[] = ['Peasant', 'Journeyman', 'Merchant', 'Noble']
 export const GENDERS: Gender[] = ['male', 'female']
 export const CHECK_STATS: CheckStat[] = ['constitution', 'charisma', 'intelligence']
+export const KIN_ROLES: KinRole[] = ['mother', 'father', 'brother', 'sister', 'sibling', 'friend']
+export const HEIR_ROLES: HeirRole[] = ['father', 'mother', 'brother', 'sister']
 export const MAX_AGE = 120

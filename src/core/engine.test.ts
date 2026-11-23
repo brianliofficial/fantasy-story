@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import { ageTagFor } from './age'
 import { defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
 import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, nameKin, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
-import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
+import type { GameConfig, GameEventConfig, HeirRole, Life, NewCharacter } from './types'
 
 const zero = () => 0
 
@@ -134,6 +134,77 @@ describe('fantasylife engine', () => {
     assert.equal(paid.pendingOutcome?.passed, true)
     assert.equal(paid.gold, 0)
     assert.equal(paid.charisma, born().charisma + 2)
+  })
+
+  it('shows a trade, substitutes a chosen relative, and otherwise picks someone at random', () => {
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    const father = life.people.find((person) => person.label === 'Father')
+    assert.ok(mother?.occupation && father)
+    assert.equal(nameKin('[mother_job] keeps the house.', life, zero), `${mother.occupation} keeps the house.`)
+    assert.equal(nameKin('[MOTHER_JOB] keeps the house.', life, zero), `${mother.occupation} keeps the house.`)
+    assert.equal(nameKin('[friend] calls.', life, zero, ['father']), `${father.name} calls.`)
+    const brother = { id: 'bro', name: 'Bram Hale', role: 'sibling' as const, label: 'Brother', gender: 'male' as const, age: 8, relationship: 40, alive: true }
+    const onlyBrother = { ...life, people: [brother] }
+    assert.equal(nameKin('[friend] calls.', onlyBrother, zero, ['father', 'mother']), 'Bram Hale calls.')
+  })
+
+  it('splits the dead character\'s wealth and leaves it to you when no heir is left', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const willed = {
+      ...market,
+      heirs: ['father', 'brother'] as HeirRole[],
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, success: { log: 'The fever takes [mother_die].', effect: {} } }
+        : option),
+    }
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    const father = life.people.find((person) => person.label === 'Father')
+    assert.ok(mother && father)
+    const brother = { id: 'bro', name: 'Bram Hale', role: 'sibling' as const, label: 'Brother', gender: 'male' as const, age: 8, relationship: 40, alive: true }
+    const withKin = { ...life, age: 20, gold: 3, people: [...life.people, brother], pendingEvent: willed }
+    const shared = chooseOption(withKin, 'haggle', undefined, zero)
+    assert.equal(shared.people.find((person) => person.id === mother.id)?.alive, false)
+    assert.equal(shared.gold, 3)
+    assert.equal(shared.pendingOutcome?.log, `The fever takes ${mother.name} dies. ${father.name} inherits 4 gold. Bram Hale inherits 4 gold.`)
+
+    const alone = {
+      ...withKin,
+      people: withKin.people.map((person) => person.id === father.id || person.id === brother.id
+        ? { ...person, alive: false, diedYearsAgo: 1 }
+        : person),
+    }
+    const inherited = chooseOption(alone, 'haggle', undefined, zero)
+    assert.equal(inherited.gold, 11)
+    assert.equal(inherited.pendingOutcome?.log, `The fever takes ${mother.name} dies. You inherit 8 gold.`)
+  })
+
+  it('copies a relative\'s job and can change age, race, and class', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const life = born()
+    const mother = life.people.find((person) => person.label === 'Mother')
+    assert.ok(mother?.occupation)
+    const working = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, workWith: 'mother' as const, success: { log: 'You take up the work.', effect: {} } }
+        : option),
+    }
+    const hired = chooseOption({ ...life, age: 20, pendingEvent: working }, 'haggle', undefined, zero)
+    assert.equal(hired.occupation?.title, mother.occupation)
+    assert.equal(hired.occupation?.salary, 8)
+
+    const changed = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, setAge: 40, setRace: 'Elf' as const, setClass: 'Noble' as const, success: { log: 'You are someone else.', effect: {} } }
+        : option),
+    }
+    const next = chooseOption({ ...life, age: 20, pendingEvent: changed }, 'haggle', undefined, zero)
+    assert.equal(next.age, 40)
+    assert.equal(next.race, 'Elf')
+    assert.equal(next.socialClass, 'Noble')
   })
 
   it('kills a parent named in the outcome log', () => {
