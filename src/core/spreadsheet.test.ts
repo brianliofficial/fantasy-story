@@ -21,6 +21,7 @@ function card(id: string, type: string): GameEventConfig {
   event.options[0]!.id = `${id}-go`
   event.options[0]!.text = 'Go on'
   event.options[0]!.checkStat = 'charisma'
+  event.options[0]!.goldCost = 40
   event.options[0]!.threshold = 50
   event.options[0]!.success = { log: 'It works.', effect: { charisma: 3 } }
   event.options[0]!.failure = { log: 'It fails.', effect: { charisma: -2 } }
@@ -44,6 +45,7 @@ describe('event pool workbook', () => {
     assert.deepEqual(restored.events[0]?.requiredClass, ['Noble'])
     assert.equal(restored.events[0]?.options[0]?.text, 'Go on')
     assert.equal(restored.events[0]?.options[0]?.checkStat, 'charisma')
+    assert.equal(restored.events[0]?.options[0]?.goldCost, 40)
     assert.equal(restored.events[0]?.options[0]?.success.effect.charisma, 3)
     assert.equal(restored.events[1]?.id, 'fair')
   })

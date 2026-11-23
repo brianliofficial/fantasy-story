@@ -117,6 +117,25 @@ describe('fantasylife engine', () => {
     assert.deepEqual(passed.pendingOutcome?.roll, { die: 50, stat: 'luck', statValue: 0, total: 50 })
   })
 
+  it('refuses an option the purse cannot afford and spends the gold cost when it can', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const priced = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, goldCost: 30, success: { log: 'You pay and pass.', effect: { charisma: 2 } } }
+        : option),
+    }
+    const poor = chooseOption({ ...born(), age: 20, gold: 29, pendingEvent: priced }, 'haggle', undefined, zero)
+    assert.equal(poor.pendingEvent?.id, market.id)
+    assert.equal(poor.pendingOutcome, null)
+    assert.equal(poor.gold, 29)
+
+    const paid = chooseOption({ ...born(), age: 20, gold: 30, pendingEvent: priced }, 'haggle', undefined, zero)
+    assert.equal(paid.pendingOutcome?.passed, true)
+    assert.equal(paid.gold, 0)
+    assert.equal(paid.charisma, born().charisma + 2)
+  })
+
   it('kills a parent named in the outcome log', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     const attack = {

@@ -145,31 +145,60 @@ function setRepeatAfter(raw: string) {
   update({ repeatAfter: Math.max(0, Math.min(120, Number(raw))) })
 }
 
+const goldMode = ref<Record<string, boolean>>({})
+
 function checkValue(option: EventOption): string {
+  if (goldMode.value[option.id] || option.goldCost != null) return 'gold'
   if (option.checkLuck) return 'luck'
   return option.checkStat ?? ''
+}
+
+function setGoldCost(optionId: string, raw: string) {
+  goldMode.value = { ...goldMode.value, [optionId]: true }
+  if (raw.trim() === '') {
+    updateOption(optionId, { goldCost: undefined })
+    return
+  }
+  if (!/^\d+$/.test(raw.trim())) return
+  updateOption(optionId, { goldCost: Math.min(100000, Number(raw)) })
 }
 
 function setCheck(optionId: string, value: string) {
   const option = props.event.options.find((item) => item.id === optionId)
   if (!option) return
   const failure = option.failure ?? { log: '', effect: {} }
+  if (value === 'gold') {
+    goldMode.value = { ...goldMode.value, [optionId]: true }
+    updateOption(optionId, {
+      goldCost: undefined,
+      checkLuck: undefined,
+      checkStat: undefined,
+    })
+    return
+  }
+  if (goldMode.value[optionId]) {
+    const next = { ...goldMode.value }
+    delete next[optionId]
+    goldMode.value = next
+  }
   if (value === 'luck') {
     updateOption(optionId, {
       checkLuck: true,
       checkStat: undefined,
+      goldCost: undefined,
       threshold: option.threshold ?? 50,
       failure,
     })
     return
   }
   if (!value) {
-    updateOption(optionId, { checkLuck: undefined, checkStat: undefined })
+    updateOption(optionId, { checkLuck: undefined, checkStat: undefined, goldCost: undefined })
     return
   }
   updateOption(optionId, {
     checkLuck: undefined,
     checkStat: value as CheckStat,
+    goldCost: undefined,
     threshold: option.threshold ?? 50,
     failure,
   })
@@ -266,13 +295,18 @@ const poolBand = computed(() => agePoolFor(props.event.type))
           <select :value="checkValue(current)" @change="setCheck(current.id, ($event.target as HTMLSelectElement).value)">
             <option value="">None</option>
             <option value="luck">Luck</option>
+            <option value="gold">gold</option>
             <option v-for="stat in CHECK_STATS" :key="stat" :value="stat">{{ stat }}</option>
           </select>
+        </label>
+        <label v-if="checkValue(current) === 'gold'" class="field">Gold cost
+          <input :value="current.goldCost ?? ''" type="number" min="1" max="100000" @input="setGoldCost(current.id, ($event.target as HTMLInputElement).value)" />
         </label>
         <label v-if="current.checkStat || current.checkLuck" class="field">Threshold
           <input :value="current.threshold ?? 50" type="number" min="0" max="100" @input="updateOption(current.id, { threshold: Number(($event.target as HTMLInputElement).value) })" />
         </label>
       </div>
+      <p v-if="checkValue(current) === 'gold'" class="hint">The player pays this gold to choose the option. It stays grey when they cannot afford it.</p>
       <p v-if="current.checkLuck" class="hint">Rolls 0–100. No attribute is added. Success when the roll reaches the threshold.</p>
       <div class="tab-set">
       <div class="tab-bar" role="tablist" aria-label="Outcome logs">

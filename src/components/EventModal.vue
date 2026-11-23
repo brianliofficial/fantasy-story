@@ -6,7 +6,14 @@ const props = defineProps<{ life: Life; event: GameEventConfig }>()
 const emit = defineEmits<{ choose: [optionId: string] }>()
 const title = nameKin(props.event.title, props.life)
 const description = nameKin(props.event.description, props.life)
-const options = props.event.options.map((option) => ({ id: option.id, text: nameKin(option.text, props.life) }))
+const options = props.event.options.map((option) => ({
+  id: option.id,
+  text: nameKin(option.text, props.life),
+  cost: option.goldCost ?? 0,
+}))
+function unaffordable(cost: number): boolean {
+  return cost > props.life.gold
+}
 </script>
 
 <template>
@@ -20,9 +27,10 @@ const options = props.event.options.map((option) => ({ id: option.id, text: name
         :key="option.id"
         type="button"
         class="choice"
+        :disabled="unaffordable(option.cost)"
         @click="emit('choose', option.id)"
       >
-        <span>{{ option.text }}</span>
+        <span>{{ option.text }}<small v-if="option.cost > 0">{{ option.cost }} gold</small></span>
       </button>
     </section>
   </div>

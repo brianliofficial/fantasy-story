@@ -375,6 +375,8 @@ export function chooseOption(
   if (life.pendingEvent.id === TEENAGE_ID) return resolveTeenage(life, config, random)
   const option = life.pendingEvent.options.find((item) => item.id === optionId)
   if (!option) return life
+  const cost = option.goldCost ?? 0
+  if (cost > life.gold) return life
   let passed = true
   let roll: OutcomeView['roll']
   if (option.checkLuck) {
@@ -390,7 +392,8 @@ export function chooseOption(
   }
   const outcome = passed || !option.failure ? option.success : option.failure
   if (!outcome) return life
-  let next = applyEffect(life, outcome.effect)
+  const paid = cost > 0 ? { ...life, gold: life.gold - cost } : life
+  let next = applyEffect(paid, outcome.effect)
   if (option.clearHouse) next = { ...next, house: null }
   const told = applyOutcomeLog(next, outcome.log, random)
   next = {

@@ -53,6 +53,7 @@ function eventToRow(event: GameEventConfig): Record<string, string | number> {
     maxAge: event.maxAge ?? '',
     showLimit: event.showLimit ?? '',
     repeatAfter: event.repeatAfter ?? '',
+    mandatory: event.mandatory ? 'true' : '',
     requiredRace: (event.requiredRace ?? []).join(', '),
     requiredClass: (event.requiredClass ?? []).join(', '),
     options: JSON.stringify(event.options),
@@ -105,17 +106,17 @@ function cellText(value: unknown): string {
 }
 
 function optionalNumber(value: unknown): number | undefined {
-function cellFlag(value: unknown): boolean {
-  if (value === true || value === 1) return true
-  const text = cellText(value).toLowerCase()
-  return text === 'true' || text === 'yes' || text === '1'
-}
-
   if (typeof value === 'number' && Number.isFinite(value)) return value
   const text = cellText(value)
   if (!text) return undefined
   const number = Number(text)
   return Number.isFinite(number) ? number : undefined
+}
+
+function cellFlag(value: unknown): boolean {
+  if (value === true || value === 1) return true
+  const text = cellText(value).toLowerCase()
+  return text === 'true' || text === 'yes' || text === '1'
 }
 
 function splitList(value: unknown): string[] {
