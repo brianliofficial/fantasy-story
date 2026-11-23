@@ -1,4 +1,5 @@
 import { defaultConfig } from './defaults'
+import { isNobleTitle } from './titles'
 import { isRecord } from './guard'
 import { cleanNamePart, parseNameList } from './names'
 import type {
@@ -25,7 +26,7 @@ import type {
   StatChange,
   YearActivity,
 } from './types'
-import { CHECK_STATS, CLASSES, HEIR_ROLES, KIN_ROLES, MAX_AGE, RACES } from './types'
+import { CHECK_STATS, CLASSES, GENDERS, HEIR_ROLES, KIN_ROLES, MAX_AGE, RACES } from './types'
 
 function isRace(value: unknown): value is Race {
   return RACES.includes(value as Race)
@@ -33,6 +34,12 @@ function isRace(value: unknown): value is Race {
 
 function isClass(value: unknown): value is SocialClass {
   return CLASSES.includes(value as SocialClass)
+}
+
+function genderList(value: unknown): Gender[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const genders = value.filter((item): item is Gender => GENDERS.includes(item as Gender))
+  return genders.length > 0 ? genders : undefined
 }
 
 function isKinRole(value: unknown): value is KinRole {
@@ -134,6 +141,8 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
     const classes = value.requiredClass.filter(isClass)
     if (classes.length > 0) event.requiredClass = classes
   }
+  const requiredGender = genderList(value.requiredGender) ?? genderList(isRecord(firstOption) ? firstOption.requiredGender : undefined)
+  if (requiredGender) event.requiredGender = requiredGender
   if (typeof value.showLimit === 'number' && Number.isFinite(value.showLimit)) {
     const cap = event.type === 'Anytime' ? 5 : 99
     event.showLimit = Math.max(1, Math.min(cap, Math.round(value.showLimit)))
@@ -155,8 +164,9 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
 
 export function optionsForSave(event: GameEventConfig): EventOption[] {
   return event.options.map((option) => {
-    const stored = { ...option } as EventOption & { nameStandIn?: HeirRole[] }
+    const stored = { ...option } as EventOption & { nameStandIn?: HeirRole[]; requiredGender?: Gender[] }
     if (event.nameStandIn?.length) stored.nameStandIn = event.nameStandIn
+    if (event.requiredGender?.length) stored.requiredGender = event.requiredGender
     return stored
   })
 }
@@ -279,6 +289,7 @@ function sanitizePerson(value: unknown): Person | null {
   if (typeof value.occupation === 'string' && value.occupation.trim()) {
     person.occupation = value.occupation.trim().slice(0, 48)
   }
+  if (typeof value.title === 'string' && isNobleTitle(value.title.trim())) person.title = value.title.trim()
   if (typeof value.constitution === 'number' && Number.isFinite(value.constitution)) {
     person.constitution = Math.max(0, Math.min(100, Math.round(value.constitution)))
   }
@@ -381,6 +392,7 @@ export function sanitizeLife(value: unknown): Life | null {
     gender,
     race: value.race,
     socialClass: value.socialClass,
+    ...(typeof value.title === 'string' && isNobleTitle(value.title.trim()) ? { title: value.title.trim() } : {}),
     age,
     constitution: Math.max(0, Math.min(100, numberOr(value.constitution, 0))),
     charisma: Math.max(0, Math.min(100, numberOr(value.charisma, 0))),
@@ -405,12 +417,22 @@ export function sanitizeLife(value: unknown): Life | null {
     pendingEvent,
     pendingOutcome,
     pendingOffer: sanitizeOffer(value.pendingOffer),
+    pendingLoss: sanitizeLoss(value.pendingLoss),
     usedThisYear: Array.isArray(value.usedThisYear)
       ? value.usedThisYear.filter((item): item is YearActivity => YEAR_ACTIVITIES.includes(item as YearActivity))
       : [],
     shownEvents: sanitizeShown(value.shownEvents),
     eventYears: sanitizeShown(value.eventYears),
   }
+}
+
+function sanitizeLoss(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null
+  const lines = value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim().slice(0, 400))
+    .slice(0, 8)
+  return lines.length > 0 ? lines : null
 }
 
 function sanitizeShown(value: unknown): Record<string, number> {

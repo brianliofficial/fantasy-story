@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGame } from '../composables/useGame'
 import { randomIdentity } from '../core/names'
+import { lifeName } from '../core/titles'
 import { CLASSES, GENDERS, RACES, type Gender, type Race, type SocialClass } from '../core/types'
 
 const router = useRouter()
@@ -77,7 +78,7 @@ function begin() {
       <p>Live a fantasy life, year by year. The events and prices can be changed from the ledger.</p>
       <section v-if="life" class="card">
         <p class="hint">{{ life.alive ? 'A life is already in progress.' : 'The last life has ended.' }}</p>
-        <strong>{{ life.name }} · age {{ life.age }}</strong>
+        <strong>{{ lifeName(life) }} · age {{ life.age }}</strong>
         <RouterLink v-if="life.alive" class="btn btn-primary btn-block" to="/play" style="text-align:center;text-decoration:none">Continue</RouterLink>
       </section>
       <div class="name-row">

@@ -98,6 +98,10 @@ export function article(word: string): 'a' | 'an' {
   return /^[aeiou]/i.test(word) ? 'an' : 'a'
 }
 
+export function nobleTitles(): string[] {
+  return NOBLE_TRADES.map((trade) => trade.child)
+}
+
 export function salaryFor(title: string): number {
   if (title === VAGRANT_TITLE) return VAGRANT_SALARY
   const trades = [...PEASANT_TRADES, ...JOURNEYMAN_TRADES, ...MERCHANT_TRADES, ...NOBLE_TRADES]

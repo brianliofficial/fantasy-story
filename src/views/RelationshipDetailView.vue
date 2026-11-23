@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useGame } from '../composables/useGame'
 import type { PersonActivity } from '../core/types'
+import { personName } from '../core/titles'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,18 +37,26 @@ function run(activity: PersonActivity) {
     </header>
     <main class="stack">
       <section class="card">
-        <h2>{{ person.name }}</h2>
+        <h2>{{ personName(person) }}</h2>
         <p class="hint">Age {{ person.age }} · {{ person.alive ? 'Living' : 'Gone' }}</p>
-        <p v-if="person.constitution != null" class="hint">Constitution {{ person.constitution }}</p>
         <p v-if="person.gold != null" class="hint">{{ person.gold }} gold</p>
-        <div v-if="person.alive" class="stat">
-          <span>Bond</span>
-          <div class="track" role="meter" :aria-valuenow="person.relationship" aria-valuemin="0" aria-valuemax="100" aria-label="Bond">
-            <div class="fill" :style="{ width: `${Math.max(0, Math.min(100, person.relationship))}%`, background: '#3caf5a' }" />
+        <div class="pair">
+          <div class="meter">
+            <span>Bond</span>
+            <div class="track" role="meter" :aria-valuenow="person.relationship" aria-valuemin="0" aria-valuemax="100" aria-label="Bond">
+              <div class="fill" :style="{ width: `${Math.max(0, Math.min(100, person.relationship))}%`, background: '#3caf5a' }" />
+            </div>
+            <strong>{{ person.relationship }}</strong>
           </div>
-          <span>{{ person.relationship }}</span>
+          <div class="meter">
+            <span>Constitution</span>
+            <div class="track" role="meter" :aria-valuenow="person.constitution ?? 0" aria-valuemin="0" aria-valuemax="100" aria-label="Constitution">
+              <div class="fill" :style="{ width: `${Math.max(0, Math.min(100, person.constitution ?? 0))}%`, background: '#c4453c' }" />
+            </div>
+            <strong>{{ person.constitution ?? 0 }}</strong>
+          </div>
         </div>
-        <p v-else>Died {{ person.diedYearsAgo ?? 0 }} years ago.</p>
+        <p v-if="!person.alive">Died {{ person.diedYearsAgo ?? 0 }} years ago.</p>
       </section>
       <h2 class="group-label">Activities</h2>
       <button
@@ -64,3 +73,26 @@ function run(activity: PersonActivity) {
     </main>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 8px;
+  align-items: center;
+
+  span {
+    grid-column: 1 / -1;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  strong { font-variant-numeric: tabular-nums; }
+}
+</style>

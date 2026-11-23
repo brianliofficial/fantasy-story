@@ -3,7 +3,7 @@ import { ledgerPools } from './pools'
 import { optionsForSave, sanitizeEvent } from './sanitize'
 import type { GameEventConfig } from './types'
 
-const EVENT_HEADERS = ['id', 'pool', 'title', 'description', 'minAge', 'maxAge', 'showLimit', 'repeatAfter', 'mandatory', 'requiredRace', 'requiredClass', 'options'] as const
+const EVENT_HEADERS = ['id', 'pool', 'title', 'description', 'minAge', 'maxAge', 'showLimit', 'repeatAfter', 'mandatory', 'requiredRace', 'requiredClass', 'requiredGender', 'options'] as const
 
 export function eventPoolWorkbook(events: GameEventConfig[], pools: string[]): Uint8Array {
   const book = XLSX.utils.book_new()
@@ -56,6 +56,7 @@ function eventToRow(event: GameEventConfig): Record<string, string | number> {
     mandatory: event.mandatory ? 'true' : '',
     requiredRace: (event.requiredRace ?? []).join(', '),
     requiredClass: (event.requiredClass ?? []).join(', '),
+    requiredGender: (event.requiredGender ?? []).join(', '),
     options: JSON.stringify(optionsForSave(event)),
   }
 }
@@ -84,6 +85,7 @@ function rowToEvent(row: Record<string, unknown>, rowNumber: number): GameEventC
     requiredRace: splitList(row.requiredRace),
     mandatory: cellFlag(row.mandatory),
     requiredClass: splitList(row.requiredClass),
+    requiredGender: splitList(row.requiredGender),
     options,
   })
   if (!event) throw new Error(`Row ${rowNumber} could not be read.`)

@@ -53,6 +53,7 @@ export interface GameEventConfig {
   maxAge?: number
   requiredRace?: Race[]
   requiredClass?: SocialClass[]
+  requiredGender?: Gender[]
   showLimit?: number
   repeatAfter?: number
   mandatory?: boolean
@@ -108,6 +109,7 @@ export interface Person {
   relationship: number
   alive: boolean
   occupation?: string
+  title?: string
   constitution?: number
   gold?: number
   diedYearsAgo?: number
@@ -171,6 +173,7 @@ export interface Life {
   gender: Gender
   race: Race
   socialClass: SocialClass
+  title?: string
   age: number
   constitution: number
   charisma: number
@@ -193,6 +196,7 @@ export interface Life {
   pendingEvent: GameEventConfig | null
   pendingOutcome: OutcomeView | null
   pendingOffer: TeacherOffer | null
+  pendingLoss: string[] | null
   usedThisYear: YearActivity[]
   shownEvents: Record<string, number>
   eventYears: Record<string, number>

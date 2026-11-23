@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BottomDock from '../components/BottomDock.vue'
 import DeathModal from '../components/DeathModal.vue'
+import LossModal from '../components/LossModal.vue'
 import EventModal from '../components/EventModal.vue'
 import LifeLog from '../components/LifeLog.vue'
 import OfferModal from '../components/OfferModal.vue'
@@ -10,10 +11,11 @@ import OutcomeModal from '../components/OutcomeModal.vue'
 import StatList from '../components/StatList.vue'
 import { ageTagFor } from '../core/age'
 import { canAge } from '../core/engine'
+import { lifeName } from '../core/titles'
 import { useGame } from '../composables/useGame'
 
 const router = useRouter()
-const { life, choose, dismiss, answer, forgetLife, age } = useGame()
+const { life, choose, dismiss, dismissLoss, answer, forgetLife, age } = useGame()
 
 watch(life, (value) => {
   if (!value) router.replace('/')
@@ -34,7 +36,7 @@ function closeDeath() {
       <div class="identity">
         <div class="avatar" aria-hidden="true">{{ initial }}</div>
         <div>
-          <h1>{{ life.name }}</h1>
+          <h1>{{ lifeName(life) }}</h1>
           <p>{{ life.gender === 'female' ? 'Female' : 'Male' }} · {{ life.race }} · {{ life.socialClass }}</p>
         </div>
       </div>
@@ -51,7 +53,8 @@ function closeDeath() {
       <StatList :life="life" />
     </main>
     <BottomDock />
-    <EventModal v-if="life.pendingEvent" :life="life" :event="life.pendingEvent" @choose="choose" />
+    <LossModal v-if="life.pendingLoss?.length" :lines="life.pendingLoss" @close="dismissLoss" />
+    <EventModal v-else-if="life.pendingEvent" :life="life" :event="life.pendingEvent" @choose="choose" />
     <OfferModal v-else-if="life.pendingOffer" :offer="life.pendingOffer" @answer="answer" />
     <OutcomeModal v-else-if="life.pendingOutcome" :outcome="life.pendingOutcome" @close="dismiss" />
     <DeathModal v-else-if="!life.alive" :life="life" @home="closeDeath" />

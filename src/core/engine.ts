@@ -18,6 +18,7 @@ import {
 import { agePoolFor } from './age'
 import { birthHome } from './birthHome'
 import { HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
+import { ensureNobleTitles, lifeName, personName } from './titles'
 import { uid } from './id'
 import { cleanNamePart, pickDistinct, randomIdentity } from './names'
 import type {
@@ -54,7 +55,7 @@ export function clampScore(value: number): number {
 }
 
 function waiting(life: Life): boolean {
-  return life.pendingEvent !== null || life.pendingOutcome !== null || life.pendingOffer !== null
+  return life.pendingEvent !== null || life.pendingOutcome !== null || life.pendingOffer !== null || (life.pendingLoss?.length ?? 0) > 0
 }
 
 export function canAge(life: Life): boolean {
@@ -90,6 +91,10 @@ function makePerson(
   const name = givenName ?? pickName(random, taken)
   taken.add(name)
   return { id: uid(), name, role, label, gender, age, relationship, alive: true }
+}
+
+function rollConstitution(random: () => number, bonus = 0): number {
+  return clampScore(randomInt(random, 50, 100) + bonus)
 }
 
 export function createLife(
@@ -136,13 +141,21 @@ export function createLife(
     return trade ? { ...person, occupation: trade.parent } : person
   })
   const people = raised.map((person) => {
-    if (person.role !== 'parent') return person
+    const constitution = rollConstitution(random, bonus.constitution)
+    if (person.role !== 'parent') return { ...person, constitution }
     return {
       ...person,
-      constitution: clampScore(randomInt(random, 50, 100) + bonus.constitution),
+      constitution,
       gold: salaryFor(person.occupation ?? ''),
     }
   })
+  const noble = ensureNobleTitles({
+    socialClass: input.socialClass,
+    title: undefined,
+    people,
+  }, random)
+  const shown = noble.people
+  const rank = noble.title
   return {
     id: uid(),
     name,
@@ -157,7 +170,8 @@ export function createLife(
     intelligence,
     gold: 0,
     parentRelationship: 72,
-    people,
+    title: rank,
+    people: shown,
     house: null,
     occupation: null,
     school: null,
@@ -168,7 +182,7 @@ export function createLife(
     crime: false,
     duty: 'ready',
     log: [
-      entry(0, `You are a ${input.gender} ${input.socialClass.toLowerCase()} ${input.race.toLowerCase()} named ${name}. Your mother is ${motherName}. Your father is ${fatherName}.`),
+      entry(0, `You are a ${input.gender} ${input.socialClass.toLowerCase()} ${input.race.toLowerCase()} named ${lifeName({ name, title: rank })}. Your mother is ${personName(shown.find((person) => person.label === 'Mother') ?? mother)}. Your father is ${personName(shown.find((person) => person.label === 'Father') ?? father)}.`),
       entry(0, birthHome(input.race, input.socialClass, random)),
     ],
     alive: true,
@@ -176,6 +190,7 @@ export function createLife(
     pendingEvent: null,
     pendingOutcome: null,
     pendingOffer: null,
+    pendingLoss: null,
     usedThisYear: [],
     shownEvents: {},
     eventYears: {},
@@ -272,6 +287,7 @@ export function eventMatches(event: GameEventConfig, life: Life): boolean {
   if (event.maxAge != null && life.age > event.maxAge) return false
   if (event.requiredRace && event.requiredRace.length > 0 && !event.requiredRace.includes(life.race)) return false
   if (event.requiredClass && event.requiredClass.length > 0 && !event.requiredClass.includes(life.socialClass)) return false
+  if (event.requiredGender && event.requiredGender.length > 0 && !event.requiredGender.includes(life.gender)) return false
   return event.options.length > 0
 }
 
@@ -284,15 +300,17 @@ function poolOpen(type: string, age: number, config: GameConfig, socialClass: So
 
 export function ensureParentBodies(life: Life, config: GameConfig, random: () => number = Math.random): Life {
   let changed = false
+  const bonus = config.races[life.race].constitution
   const people = life.people.map((person) => {
-    if (person.role !== 'parent') return person
     const constitution = typeof person.constitution === 'number'
       ? person.constitution
-      : clampScore(randomInt(random, 50, 100) + config.races[life.race].constitution)
-    const gold = typeof person.gold === 'number' ? person.gold : salaryFor(person.occupation ?? '')
+      : rollConstitution(random, bonus)
+    const gold = person.role === 'parent'
+      ? (typeof person.gold === 'number' ? person.gold : salaryFor(person.occupation ?? ''))
+      : person.gold
     if (constitution === person.constitution && gold === person.gold) return person
     changed = true
-    return { ...person, constitution, gold }
+    return gold === person.gold ? { ...person, constitution } : { ...person, constitution, gold }
   })
   return changed ? { ...life, people } : life
 }
@@ -317,7 +335,7 @@ function agePeople(
     if (person.role === 'parent') {
       const start = typeof person.constitution === 'number'
         ? person.constitution
-        : clampScore(randomInt(random, 50, 100) + config.races[life.race].constitution)
+        : rollConstitution(random, config.races[life.race].constitution)
       const loss = randomInt(random, 0, 5)
       next = { ...next, constitution: Math.max(0, start - loss), gold: carriedGold(person) }
     }
@@ -327,8 +345,8 @@ function agePeople(
     const relation = person.label.toLowerCase()
     const possessive = person.gender === 'female' ? 'her' : 'his'
     const cause = wornOut
-      ? `${person.name}, your ${relation}, dies as ${possessive} constitution fails.`
-      : `${person.name}, your ${relation}, dies peacefully at ${age}.`
+      ? `${personName(person)}, your ${relation}, dies as ${possessive} constitution fails.`
+      : `${personName(person)}, your ${relation}, dies peacefully at ${age}.`
     if (purse > 0) {
       gold += purse
       notices.push(`${cause} You inherit ${purse} gold.`)
@@ -346,6 +364,7 @@ function die(life: Life, reason: string): Life {
     alive: false,
     deathReason: reason,
     pendingEvent: null,
+    pendingLoss: null,
     constitution: 0,
     log: [...life.log, entry(life.age, reason)],
   }
@@ -359,7 +378,7 @@ export function ageUp(
 ): Life {
   if (!life.alive || waiting(life)) return life
   if (life.age >= MAX_AGE) {
-    return die(life, `${life.name} slips away at ${life.age}, at the end of a very long tale.`)
+    return die(life, `${lifeName(life)} slips away at ${life.age}, at the end of a very long tale.`)
   }
 
   const age = life.age + 1
@@ -382,10 +401,11 @@ export function ageUp(
       log: [...next.log, entry(age, `You earn ${pay} gold for the year as ${article(job.title)} ${job.title}.`)],
     }
   }
+  next = { ...next, pendingLoss: aged.notices.length > 0 ? aged.notices : null }
   if (age >= config.aging.startAge) {
     const loss = Math.max(0, config.aging.constitutionLossPerYear)
     if (loss > 0 && next.constitution - loss <= 0) {
-      return die(applyEffect(next, { constitution: -loss }), `At ${age}, ${life.name}'s strength finally gives out.`)
+      return die(applyEffect(next, { constitution: -loss }), `At ${age}, ${lifeName(life)}'s strength finally gives out.`)
     }
     if (loss > 0) next = applyEffect(next, { constitution: -loss })
   }
@@ -409,7 +429,7 @@ export function ageUp(
   if (eligible.length === 0) {
     return {
       ...next,
-      log: [...next.log, entry(age, `${life.name} spends age ${age} without a notable tale.`)],
+      log: [...next.log, entry(age, `${lifeName(life)} spends age ${age} without a notable tale.`)],
     }
   }
   const event = eligible[randomInt(random, 0, eligible.length - 1)]
@@ -479,6 +499,11 @@ export function dismissOutcome(life: Life): Life {
   return { ...life, pendingOutcome: null }
 }
 
+export function dismissLoss(life: Life): Life {
+  if (!life.pendingLoss?.length) return life
+  return { ...life, pendingLoss: null }
+}
+
 export const INFANT_MAX_AGE = 5
 export const CHILDHOOD_MAX_AGE = 12
 
@@ -526,8 +551,8 @@ export function infantAction(
     if (passed && parents.length > 0) {
       const parent = parents[randomInt(random, 0, parents.length - 1)] ?? parents[0]
       next = shiftRelationships(applyEffect(life, { constitution: 10 }), (person) => person.id === parent.id, 10)
-      log = `Your ${parent.name} soothes you.`
-      changes = `Constitution +10. ${parent.name} +10 relationship.`
+      log = `Your ${personName(parent)} soothes you.`
+      changes = `Constitution +10. ${personName(parent)} +10 relationship.`
     } else {
       next = shiftRelationships(life, (person) => person.role === 'parent' && person.alive, -20)
       log = 'You are left alone to cry.'
@@ -569,26 +594,26 @@ export function interact(life: Life, personId: string, activity: PersonActivity)
   if (activity === 'compliment') {
     relationship += 8
     effect = { charisma: 1 }
-    log = `You compliment ${person.name}. They look pleased.`
+    log = `You compliment ${personName(person)}. They look pleased.`
   } else if (activity === 'conversation') {
     relationship += 4
     effect = { charisma: 2 }
-    log = `You talk with ${person.name} until the light changes.`
+    log = `You talk with ${personName(person)} until the light changes.`
   } else if (activity === 'ask') {
     if (person.relationship < 45) {
       relationship -= 6
-      log = `${person.name} refuses to hand over any coin.`
+      log = `${personName(person)} refuses to hand over any coin.`
     } else {
       relationship -= 12
       effect = { gold: 40 }
-      log = `${person.name} sighs and gives you 40 gold.`
+      log = `${personName(person)} sighs and gives you 40 gold.`
     }
   } else if (life.gold < 30) {
-    log = `You want to give ${person.name} a gift, but your purse is too light.`
+    log = `You want to give ${personName(person)} a gift, but your purse is too light.`
   } else {
     relationship += 12
     effect = { gold: -30 }
-    log = `You give ${person.name} a small gift. It cost 30 gold.`
+    log = `You give ${personName(person)} a small gift. It cost 30 gold.`
   }
 
   const people = life.people.map((item) => (
@@ -628,9 +653,9 @@ function livingRelations(life: Life, deaths: Set<string>): Person[] {
 function standInRelative(life: Life, deaths: Set<string>, random: () => number, gone: Person | undefined, mark: string): string {
   const relatives = livingRelations(life, deaths)
   const chosen = relatives.length === 0 ? undefined : relatives[randomInt(random, 0, relatives.length - 1)]
-  if (!chosen) return gone ? `${gone.name} is already gone` : mark
+  if (!chosen) return gone ? `${personName(gone)} is already gone` : mark
   deaths.add(chosen.id)
-  return `${chosen.name} dies`
+  return `${personName(chosen)} dies`
 }
 
 function standInName(life: Life, blocked: Set<string>, random: () => number): string | undefined {
@@ -638,7 +663,8 @@ function standInName(life: Life, blocked: Set<string>, random: () => number): st
   const living = others.filter((person) => person.alive)
   const pool = living.length > 0 ? living : others
   if (pool.length === 0) return undefined
-  return pool[randomInt(random, 0, pool.length - 1)]?.name
+  const chosen = pool[randomInt(random, 0, pool.length - 1)]
+  return chosen ? personName(chosen) : undefined
 }
 
 function kinMatches(life: Life, kind: string): Person[] {
@@ -687,10 +713,14 @@ export function nameKin(text: string, life: Life, random: () => number = Math.ra
     const matches = kinMatches(life, kind)
     const living = matches.filter((person) => person.alive)
     if (living.length > 0) {
-      return pickKin(living, kind, random)?.name ?? mark
+      const chosen = pickKin(living, kind, random)
+      return chosen ? personName(chosen) : mark
     }
-    if (matches.length === 0) return kinPerson(life, kind, random, standIn)?.name ?? mark
-    return standInName(life, new Set(matches.map((person) => person.id)), random) ?? matches[0]?.name ?? mark
+    if (matches.length === 0) {
+      const chosen = kinPerson(life, kind, random, standIn)
+      return chosen ? personName(chosen) : mark
+    }
+    return standInName(life, new Set(matches.map((person) => person.id)), random) ?? personName(matches[0]) ?? mark
   })
 }
 
@@ -720,14 +750,14 @@ function applyOutcomeLog(
     const matches = life.people.filter((item) => matchesKin(item, kind))
     if (kind === 'wholefamily') {
       const family = matches.filter((item) => item.alive && !deaths.has(item.id))
-      if (family.length === 0) return matches[0] ? `${matches[0].name} is already gone` : mark
+      if (family.length === 0) return matches[0] ? `${personName(matches[0])} is already gone` : mark
       family.forEach((item) => deaths.add(item.id))
-      return family.map((item) => `${item.name} dies`).join('. ')
+      return family.map((item) => `${personName(item)} dies`).join('. ')
     }
     const living = matches.find((item) => item.alive && !deaths.has(item.id))
     if (!living) return standInRelative(life, deaths, random, matches[0], mark)
     deaths.add(living.id)
-    return `${living.name} dies`
+    return `${personName(living)} dies`
   }), life, random, standIn)
   const willed = inheritance(life, deaths)
   const told = willed.note ? `${resolved} ${willed.note}` : resolved
@@ -814,7 +844,7 @@ export function buyHouse(life: Life, config: GameConfig, tier: SocialClass): Lif
     gold: life.gold - price,
     house: tier,
     socialClass: nextRank > classRank ? tier : life.socialClass,
-    log: [...life.log, entry(life.age, `${life.name} buys a ${tier.toLowerCase()} house for ${price} gold.`)],
+    log: [...life.log, entry(life.age, `${lifeName(life)} buys a ${tier.toLowerCase()} house for ${price} gold.`)],
   }
 }
 
@@ -935,6 +965,7 @@ export function befriend(life: Life, stranger: Stranger, config?: GameConfig): L
     gender: stranger.gender,
     age: Math.max(0, stranger.age),
     relationship: 40,
+    constitution: rollConstitution(Math.random, config ? config.races[stranger.race].constitution : 0),
     alive: true,
   }
   const log = `You make a new friend named ${friend.name}.`
@@ -1019,6 +1050,7 @@ export function answerTeacher(life: Life, accept: boolean): Life {
       gender: offer.gender ?? 'male',
       age: Math.max(life.age + 20, 30),
       relationship: 55,
+      constitution: rollConstitution(Math.random),
       alive: true,
     }
     const log = 'Your parents consent'

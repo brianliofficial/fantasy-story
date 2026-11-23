@@ -10,6 +10,7 @@ import {
   chooseOption,
   createLife,
   ensureParentBodies,
+  dismissLoss,
   dismissOutcome,
   askForGold,
   changeSubject,
@@ -26,6 +27,7 @@ import {
   yearActivity,
 } from '../core/engine'
 import { sanitizeConfig, sanitizeLife } from '../core/sanitize'
+import { ensureNobleTitles } from '../core/titles'
 import { ledgerPools, sameLedger } from '../core/pools'
 import type {
   ChildhoodAction,
@@ -68,6 +70,7 @@ export interface GameStore {
   age: () => void
   choose: (optionId: string) => void
   dismiss: () => void
+  dismissLoss: () => void
   visit: (personId: string, activity: PersonActivity) => void
   act: (activity: YearActivity) => void
   infant: (action: InfantAction) => void
@@ -109,7 +112,7 @@ export function provideGame(): GameStore {
   for (const key of RETIRED_EVENT_KEYS) localStorage.removeItem(key)
   const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
   const savedLife = sanitizeLife(read(LIFE_KEY))
-  const preparedLife = savedLife ? ensureParentBodies(savedLife, config.value) : null
+  const preparedLife = savedLife ? ensureNobleTitles(ensureParentBodies(savedLife, config.value)) : null
   const life = ref<Life | null>(preparedLife)
   if (preparedLife && preparedLife !== savedLife) write(LIFE_KEY, preparedLife)
   const lastDeath = ref<LastDeath | null>(deathOf(savedLife) ?? readLastDeath(read(LAST_DEATH_KEY)))
@@ -154,6 +157,10 @@ export function provideGame(): GameStore {
     dismiss() {
       if (!life.value) return
       update(dismissOutcome(life.value))
+    },
+    dismissLoss() {
+      if (!life.value) return
+      update(dismissLoss(life.value))
     },
     visit(personId, activity) {
       if (!life.value) return

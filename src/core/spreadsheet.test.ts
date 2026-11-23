@@ -18,6 +18,7 @@ function card(id: string, type: string): GameEventConfig {
   event.mandatory = true
   event.requiredRace = ['Elf']
   event.requiredClass = ['Noble']
+  event.requiredGender = ['female']
   event.options[0]!.id = `${id}-go`
   event.options[0]!.text = 'Go on'
   event.options[0]!.checkStat = 'charisma'
@@ -43,6 +44,7 @@ describe('event pool workbook', () => {
     assert.equal(restored.events[0]?.mandatory, true)
     assert.deepEqual(restored.events[0]?.requiredRace, ['Elf'])
     assert.deepEqual(restored.events[0]?.requiredClass, ['Noble'])
+    assert.deepEqual(restored.events[0]?.requiredGender, ['female'])
     assert.equal(restored.events[0]?.options[0]?.text, 'Go on')
     assert.equal(restored.events[0]?.options[0]?.checkStat, 'charisma')
     assert.equal(restored.events[0]?.options[0]?.goldCost, 40)

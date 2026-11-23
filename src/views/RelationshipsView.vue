@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import BottomDock from '../components/BottomDock.vue'
 import { useGame } from '../composables/useGame'
 import type { Person, RelationRole } from '../core/types'
+import { personName } from '../core/titles'
 
 const router = useRouter()
 const { life } = useGame()
@@ -15,6 +16,7 @@ const groups: { key: string; title: string; match: (person: Person) => boolean }
   { key: 'parents', title: 'Parents', match: (person) => person.alive && person.role === 'parent' },
   { key: 'siblings', title: 'Siblings', match: (person) => person.alive && person.role === 'sibling' },
   { key: 'friends', title: 'Friends', match: (person) => person.alive && person.role === 'friend' },
+  { key: 'teachers', title: 'Teachers', match: (person) => person.alive && person.role === 'teacher' },
   { key: 'late', title: 'Late relationships', match: (person) => !person.alive },
 ]
 
@@ -25,10 +27,11 @@ const sections = computed(() => groups
 function roleLabel(role: RelationRole): string {
   if (role === 'parent') return 'Parent'
   if (role === 'sibling') return 'Sibling'
+  if (role === 'teacher') return 'Teacher'
   return 'Friend'
 }
 
-function bondWidth(score: number): string {
+function meterWidth(score: number): string {
   return `${Math.max(0, Math.min(100, score))}%`
 }
 </script>
@@ -42,22 +45,30 @@ function bondWidth(score: number): string {
     </header>
     <main class="stage">
       <p v-if="sections.length === 0" class="hint">No one else is in this tale yet.</p>
-      <section v-for="section in sections" :key="section.key">
+      <section class="card" v-for="section in sections" :key="section.key">
         <h2 class="group-label">{{ section.title }}</h2>
         <RouterLink v-for="person in section.people" :key="person.id" class="person-row" :to="`/relationships/${person.id}`">
           <span class="who">
-            <strong>{{ person.name }}</strong>
-            <small v-if="person.alive"> ({{ person.label }}<template v-if="person.constitution != null"> · Constitution {{ person.constitution }}</template>)</small>
+            <strong>{{ personName(person) }}</strong>
+            <small v-if="person.alive"> ({{ person.label }})</small>
             <small v-else> · died {{ person.diedYearsAgo ?? 0 }} years ago</small>
           </span>
-          <span v-if="person.alive" class="bond">
-            <span class="track relation-track" role="meter" :aria-valuenow="person.relationship" aria-valuemin="0" aria-valuemax="100" aria-label="Bond">
-              <span class="fill" :style="{ width: bondWidth(person.relationship), background: '#3caf5a' }" />
+          <span class="meters">
+            <span class="meter">
+              <span class="track" role="meter" :aria-valuenow="person.relationship" aria-valuemin="0" aria-valuemax="100" aria-label="Bond">
+                <span class="fill" :style="{ width: meterWidth(person.relationship), background: '#3caf5a' }" />
+              </span>
+              <span class="meter-score">{{ person.relationship }}</span>
             </span>
-            <span class="bond-score">{{ person.relationship }}</span>
+            <span class="meter">
+              <span class="track" role="meter" :aria-valuenow="person.constitution ?? 0" aria-valuemin="0" aria-valuemax="100" aria-label="Constitution">
+                <span class="fill" :style="{ width: meterWidth(person.constitution ?? 0), background: '#c4453c' }" />
+              </span>
+              <span class="meter-score">{{ person.constitution ?? 0 }}</span>
+            </span>
           </span>
           <span aria-hidden="true">›</span>
-          <span class="sr-only">{{ roleLabel(person.role) }}, bond {{ person.relationship }}</span>
+          <span class="sr-only">{{ roleLabel(person.role) }}, bond {{ person.relationship }}, constitution {{ person.constitution ?? 0 }}</span>
         </RouterLink>
       </section>
     </main>
@@ -68,20 +79,40 @@ function bondWidth(score: number): string {
 <style lang="scss" scoped>
 .who { flex: 1; min-width: 0; }
 
-.bond {
+.meters {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 112px;
+  gap: 10px;
   flex: none;
 }
 
-.relation-track { flex: 1; min-width: 0; }
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 84px;
+}
 
-.bond-score {
-  width: 2rem;
+.meter .track { flex: 1; min-width: 0; }
+
+.meter-score {
+  width: 1.6rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  font-size: 0.85rem;
+}
+.stage{
+  max-height:calc(100vh - 140px);
+  overflow-y: auto;
+  section{
+    gap: 10px;
+    display: flex;
+    flex-direction: column;
+  }
+  .meters{
+    display:flex;
+    flex-direction: column;
+  }
 }
 </style>

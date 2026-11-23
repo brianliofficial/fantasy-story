@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { agePoolFor } from '../core/age'
 import { uid } from '../core/id'
 import { cloneData } from '../core/clone'
-import type { CheckStat, EventOption, GameEventConfig, HeirRole, KinRole, Race, SocialClass, StatChange } from '../core/types'
-import { CHECK_STATS, CLASSES, HEIR_ROLES, KIN_ROLES, RACES } from '../core/types'
+import type { CheckStat, EventOption, GameEventConfig, Gender, HeirRole, KinRole, Race, SocialClass, StatChange } from '../core/types'
+import { CHECK_STATS, CLASSES, GENDERS, HEIR_ROLES, KIN_ROLES, RACES } from '../core/types'
 
 const props = defineProps<{ event: GameEventConfig; error?: string; pools: string[] }>()
 const emit = defineEmits<{ change: [event: GameEventConfig]; save: [event: GameEventConfig]; remove: [id: string] }>()
@@ -54,6 +54,13 @@ function toggleClass(socialClass: SocialClass) {
   if (currentClasses.has(socialClass)) currentClasses.delete(socialClass)
   else currentClasses.add(socialClass)
   update({ requiredClass: currentClasses.size ? [...currentClasses] : undefined })
+}
+
+function toggleGender(gender: Gender) {
+  const currentGenders = new Set(props.event.requiredGender ?? [])
+  if (currentGenders.has(gender)) currentGenders.delete(gender)
+  else currentGenders.add(gender)
+  update({ requiredGender: currentGenders.size ? [...currentGenders] : undefined })
 }
 
 function selectOption(index: number) {
@@ -325,6 +332,10 @@ const poolBand = computed(() => agePoolFor(props.event.type))
       <p class="hint">Class filter. Leave all off to allow every class.</p>
       <div class="toggle-row">
         <button v-for="item in CLASSES" :key="item" type="button" class="pill" :class="{ 'is-selected': event.requiredClass?.includes(item) }" @click="toggleClass(item)">{{ item }}</button>
+      </div>
+      <p class="hint">Gender limited. Leave all off to allow every gender.</p>
+      <div class="toggle-row">
+        <button v-for="item in GENDERS" :key="item" type="button" class="pill" :class="{ 'is-selected': event.requiredGender?.includes(item) }" @click="toggleGender(item)">{{ item === 'male' ? 'Male' : 'Female' }}</button>
       </div>
     </section>
     <label class="field">Event

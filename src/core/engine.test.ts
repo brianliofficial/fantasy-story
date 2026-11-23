@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { ageTagFor } from './age'
 import { defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
-import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, nameKin, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
+import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, ensureParentBodies, eventMatches, infantAction, nameKin, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
 import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
 
 const zero = () => 0
@@ -81,7 +81,8 @@ describe('fantasylife engine', () => {
       race: 'Elf',
       socialClass: 'Noble',
     }, config, zero)
-    assert.equal(life.log[0]?.text, 'You are a female noble elf named Ellanda Tevin. Your mother is Siama Tevin. Your father is Illdros Tevin.')
+    assert.equal(life.log[0]?.text, 'You are a female noble elf named Knight Ellanda Tevin. Your mother is Knight Siama Tevin. Your father is Knight Illdros Tevin.')
+    assert.equal(nameKin('[mother] waits.', life, zero), 'Knight Siama Tevin waits.')
     assert.equal(life.log[1]?.text, 'You are born to a noble elf family living in Silverglen. Your home is a beautiful, enormous manor.')
     const human = createLife({
       forename: 'Aldric',
@@ -172,6 +173,10 @@ describe('fantasylife engine', () => {
     assert.ok(mother && father)
     assert.equal(mother.constitution, 55)
     assert.equal(father.constitution, 55)
+    const sibling = { id: 'bro', name: 'Bram Hale', role: 'sibling' as const, label: 'Brother', gender: 'male' as const, age: 4, relationship: 40, alive: true }
+    const filled = ensureParentBodies({ ...life, people: [...life.people, sibling] }, defaultConfig(), zero)
+    assert.equal(filled.people.find((person) => person.id === 'bro')?.constitution, 55)
+    assert.equal(filled.people.find((person) => person.id === mother.id)?.constitution, 55)
     assert.equal(mother.gold, 8)
     assert.equal(father.gold, 8)
     const shared = chooseOption({ ...life, age: 20, gold: 3, pendingEvent: willed }, 'haggle', undefined, zero)
@@ -196,6 +201,7 @@ describe('fantasylife engine', () => {
     assert.equal(failed.occupation?.title, 'Vagrant')
     assert.equal(failed.occupation?.salary, 1)
     assert.ok(failed.log.some((entry) => entry.text === `${mother.name}, your mother, dies as her constitution fails. You inherit 8 gold.`))
+    assert.deepEqual(failed.pendingLoss, [`${mother.name}, your mother, dies as her constitution fails. You inherit 8 gold.`])
   })
 
   it('copies a relative\'s job and can change age, race, and class', () => {
@@ -455,6 +461,9 @@ describe('fantasylife engine', () => {
     assert.equal(eventMatches(events.find((event) => event.id === 'star-lesson') as GameEventConfig, aged), false)
     assert.equal(eventMatches(events.find((event) => event.id === 'field-work') as GameEventConfig, aged), false)
     assert.equal(eventMatches(events.find((event) => event.id === 'name-day') as GameEventConfig, aged), true)
+    const named = events.find((event) => event.id === 'name-day') as GameEventConfig
+    assert.equal(eventMatches({ ...named, requiredGender: ['male'] }, aged), false)
+    assert.equal(eventMatches({ ...named, requiredGender: ['female'] }, aged), true)
   })
 
   it('wears the body down after the aging age and can end the life', () => {
