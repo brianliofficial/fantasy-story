@@ -98,7 +98,7 @@ function restore() {
       </section>
       <section class="card names-span">
         <h2>Race names</h2>
-        <p class="hint">One name per line. Each list belongs to one race. Parents take a forename from that race and share the character's surname. The random name button uses both lists. A forename already used by the character is skipped.</p>
+        <p class="hint">One name per line. Each list belongs to one race. Parents take a forename from that race and share the character's surname. Random character picks a gender, then a forename from that list and a surname from the race. A forename already used by the character is skipped.</p>
         <div v-for="race in RACES" :key="`names-${race}`" class="option-card">
           <h2>{{ race.toUpperCase() }}</h2>
           <label class="field">Male forenames

@@ -19,12 +19,17 @@ const race = ref<Race | ''>('')
 const socialClass = ref<SocialClass | ''>('')
 const error = ref('')
 
+function pickOne<T>(list: readonly T[]): T {
+  return list[Math.floor(Math.random() * list.length)] ?? list[0]
+}
+
 function fillRandom() {
-  if (!gender.value || !race.value) {
-    error.value = 'Choose a gender and a race first.'
-    return
-  }
-  const next = randomIdentity(config.value.names[race.value], gender.value)
+  const nextGender = pickOne(GENDERS)
+  const nextRace = pickOne(RACES)
+  gender.value = nextGender
+  race.value = nextRace
+  socialClass.value = pickOne(CLASSES)
+  const next = randomIdentity(config.value.names[nextRace], nextGender)
   forename.value = next.forename
   surname.value = next.surname
   error.value = ''
@@ -85,7 +90,7 @@ function begin() {
           <input id="hero-surname" v-model="surname" maxlength="24" autocomplete="off" placeholder="Tevin" />
         </label>
       </div>
-      <button type="button" class="btn" @click="fillRandom">Random name</button>
+      <button type="button" class="btn" @click="fillRandom">Random character</button>
       <fieldset class="field" style="border:0;padding:0;margin:0">
         <legend>Gender</legend>
         <div class="choice-row">

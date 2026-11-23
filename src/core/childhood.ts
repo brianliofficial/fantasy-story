@@ -99,6 +99,7 @@ export function article(word: string): 'a' | 'an' {
 }
 
 export function salaryFor(title: string): number {
+  if (title === VAGRANT_TITLE) return VAGRANT_SALARY
   const trades = [...PEASANT_TRADES, ...JOURNEYMAN_TRADES, ...MERCHANT_TRADES, ...NOBLE_TRADES]
   return trades.find((trade) => trade.parent === title || trade.child === title)?.salary ?? 0
 }

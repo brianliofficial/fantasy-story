@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BottomDock from '../components/BottomDock.vue'
-import { tradesFor } from '../core/childhood'
+import { tradesFor, VAGRANT_SALARY, VAGRANT_TITLE } from '../core/childhood'
 import { shows } from '../core/engine'
 import { useGame } from '../composables/useGame'
 
@@ -18,7 +18,13 @@ watch(life, (value) => {
 }, { immediate: true })
 
 const jobs = computed(() => (life.value ? tradesFor(life.value.socialClass) : []))
+const job = computed(() => life.value?.occupation ?? { title: VAGRANT_TITLE, salary: VAGRANT_SALARY })
 const busy = computed(() => life.value === null || !life.value.alive)
+
+function chooseJob(title: string) {
+  listing.value = false
+  findJob(title)
+}
 </script>
 
 <template>
@@ -29,29 +35,36 @@ const busy = computed(() => life.value === null || !life.value.alive)
       <span />
     </header>
     <main class="stage">
-      <article v-if="life.occupation" class="card">
-        <h2>{{ life.occupation.title }}</h2>
-        <p>{{ life.occupation.salary }} gold per year</p>
+      <article class="card">
+        <h2>{{ job.title }}</h2>
+        <p>{{ job.salary }} gold per year</p>
       </article>
-      <p v-else class="hint">You have no job yet.</p>
-      <button type="button" class="choice" :disabled="busy" @click="listing = !listing">
+      <button type="button" class="choice" :disabled="busy" @click="listing = true">
         <strong>Find a new job</strong>
-      </button>
-      <button
-        v-for="job in listing ? jobs : []"
-        :key="job.child"
-        type="button"
-        class="choice"
-        :disabled="busy"
-        @click="findJob(job.child)"
-      >
-        <strong>{{ job.child }}</strong>
-        <span>{{ job.salary }} gold per year</span>
       </button>
       <button type="button" class="choice" :disabled="busy" @click="askGold()">
         <strong>Ask for more gold</strong>
       </button>
     </main>
     <BottomDock />
+    <Teleport to="body">
+      <div v-if="listing" class="modal-backdrop">
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="job-list-title">
+          <h2 id="job-list-title">Find a new job</h2>
+          <button
+            v-for="trade in jobs"
+            :key="trade.child"
+            type="button"
+            class="choice"
+            :disabled="busy"
+            @click="chooseJob(trade.child)"
+          >
+            <strong>{{ trade.child }}</strong>
+            <span>{{ trade.salary }} gold per year</span>
+          </button>
+          <button type="button" class="btn btn-block" @click="listing = false">Close</button>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>

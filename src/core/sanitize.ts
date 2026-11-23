@@ -149,17 +149,14 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
   }
   if (value.mandatory === true) event.mandatory = true
   const nameStandIn = heirList(value.nameStandIn) ?? heirList(firstOption?.nameStandIn)
-  const heirs = heirList(value.heirs) ?? heirList(firstOption?.heirs)
   if (nameStandIn) event.nameStandIn = nameStandIn
-  if (heirs) event.heirs = heirs
   return event
 }
 
 export function optionsForSave(event: GameEventConfig): EventOption[] {
   return event.options.map((option) => {
-    const stored = { ...option } as EventOption & { nameStandIn?: HeirRole[]; heirs?: HeirRole[] }
+    const stored = { ...option } as EventOption & { nameStandIn?: HeirRole[] }
     if (event.nameStandIn?.length) stored.nameStandIn = event.nameStandIn
-    if (event.heirs?.length) stored.heirs = event.heirs
     return stored
   })
 }
@@ -282,6 +279,12 @@ function sanitizePerson(value: unknown): Person | null {
   if (typeof value.occupation === 'string' && value.occupation.trim()) {
     person.occupation = value.occupation.trim().slice(0, 48)
   }
+  if (typeof value.constitution === 'number' && Number.isFinite(value.constitution)) {
+    person.constitution = Math.max(0, Math.min(100, Math.round(value.constitution)))
+  }
+  if (typeof value.gold === 'number' && Number.isFinite(value.gold)) {
+    person.gold = Math.max(0, Math.min(1000000, Math.round(value.gold)))
+  }
   if (!person.alive) person.diedYearsAgo = Math.max(0, numberOr(value.diedYearsAgo, 0))
   return person
 }
@@ -369,7 +372,7 @@ export function sanitizeLife(value: unknown): Life | null {
   const occupation = sanitizeOccupation(value.occupation)
   const school = typeof value.school === 'string' && value.school.trim() ? value.school.trim().slice(0, 48) : null
   let duty: HouseholdDuty = value.duty === 'choosing' || value.duty === 'done' ? value.duty : 'ready'
-  if (occupation || school) duty = 'done'
+  if ((occupation && occupation.title !== 'Vagrant') || school) duty = 'done'
   return {
     id: value.id,
     name,

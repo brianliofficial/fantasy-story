@@ -57,7 +57,6 @@ export interface GameEventConfig {
   repeatAfter?: number
   mandatory?: boolean
   nameStandIn?: HeirRole[]
-  heirs?: HeirRole[]
   options: EventOption[]
 }
 
@@ -109,6 +108,8 @@ export interface Person {
   relationship: number
   alive: boolean
   occupation?: string
+  constitution?: number
+  gold?: number
   diedYearsAgo?: number
 }
 

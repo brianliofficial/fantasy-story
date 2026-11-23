@@ -47,7 +47,7 @@ function bondWidth(score: number): string {
         <RouterLink v-for="person in section.people" :key="person.id" class="person-row" :to="`/relationships/${person.id}`">
           <span class="who">
             <strong>{{ person.name }}</strong>
-            <small v-if="person.alive"> ({{ person.label }})</small>
+            <small v-if="person.alive"> ({{ person.label }}<template v-if="person.constitution != null"> · Constitution {{ person.constitution }}</template>)</small>
             <small v-else> · died {{ person.diedYearsAgo ?? 0 }} years ago</small>
           </span>
           <span v-if="person.alive" class="bond">

@@ -38,6 +38,8 @@ function run(activity: PersonActivity) {
       <section class="card">
         <h2>{{ person.name }}</h2>
         <p class="hint">Age {{ person.age }} · {{ person.alive ? 'Living' : 'Gone' }}</p>
+        <p v-if="person.constitution != null" class="hint">Constitution {{ person.constitution }}</p>
+        <p v-if="person.gold != null" class="hint">{{ person.gold }} gold</p>
         <div v-if="person.alive" class="stat">
           <span>Bond</span>
           <div class="track" role="meter" :aria-valuenow="person.relationship" aria-valuemin="0" aria-valuemax="100" aria-label="Bond">

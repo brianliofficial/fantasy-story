@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import { ageTagFor } from './age'
 import { defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
 import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, eventMatches, infantAction, nameKin, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
-import type { GameConfig, GameEventConfig, HeirRole, Life, NewCharacter } from './types'
+import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
 
 const zero = () => 0
 
@@ -82,6 +82,15 @@ describe('fantasylife engine', () => {
       socialClass: 'Noble',
     }, config, zero)
     assert.equal(life.log[0]?.text, 'You are a female noble elf named Ellanda Tevin. Your mother is Siama Tevin. Your father is Illdros Tevin.')
+    assert.equal(life.log[1]?.text, 'You are born to a noble elf family living in Silverglen. Your home is a beautiful, enormous manor.')
+    const human = createLife({
+      forename: 'Aldric',
+      surname: 'Hale',
+      gender: 'male',
+      race: 'Human',
+      socialClass: 'Noble',
+    }, defaultConfig(), zero)
+    assert.equal(human.log[1]?.text, 'You are born to a noble human family living in Brightspire. Your home is a beautiful, enormous manor.')
     assert.equal(life.people.find((person) => person.label === 'Mother')?.name, 'Siama Tevin')
     assert.equal(life.people.find((person) => person.label === 'Father')?.name, 'Illdros Tevin')
   })
@@ -149,11 +158,10 @@ describe('fantasylife engine', () => {
     assert.equal(nameKin('[friend] calls.', onlyBrother, zero, ['father', 'mother']), 'Bram Hale calls.')
   })
 
-  it('splits the dead character\'s wealth and leaves it to you when no heir is left', () => {
+  it('gives you a dead character\'s gold and lets a parent\'s constitution fail', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     const willed = {
       ...market,
-      heirs: ['father', 'brother'] as HeirRole[],
       options: market.options.map((option) => option.id === 'haggle'
         ? { ...option, checkStat: undefined, success: { log: 'The fever takes [mother_die].', effect: {} } }
         : option),
@@ -162,22 +170,32 @@ describe('fantasylife engine', () => {
     const mother = life.people.find((person) => person.label === 'Mother')
     const father = life.people.find((person) => person.label === 'Father')
     assert.ok(mother && father)
-    const brother = { id: 'bro', name: 'Bram Hale', role: 'sibling' as const, label: 'Brother', gender: 'male' as const, age: 8, relationship: 40, alive: true }
-    const withKin = { ...life, age: 20, gold: 3, people: [...life.people, brother], pendingEvent: willed }
-    const shared = chooseOption(withKin, 'haggle', undefined, zero)
+    assert.equal(mother.constitution, 55)
+    assert.equal(father.constitution, 55)
+    assert.equal(mother.gold, 8)
+    assert.equal(father.gold, 8)
+    const shared = chooseOption({ ...life, age: 20, gold: 3, pendingEvent: willed }, 'haggle', undefined, zero)
     assert.equal(shared.people.find((person) => person.id === mother.id)?.alive, false)
-    assert.equal(shared.gold, 3)
-    assert.equal(shared.pendingOutcome?.log, `The fever takes ${mother.name} dies. ${father.name} inherits 4 gold. Bram Hale inherits 4 gold.`)
+    assert.equal(shared.people.find((person) => person.id === mother.id)?.gold, 0)
+    assert.equal(shared.gold, 11)
+    assert.equal(shared.pendingOutcome?.log, `The fever takes ${mother.name} dies. You inherit 8 gold.`)
 
-    const alone = {
-      ...withKin,
-      people: withKin.people.map((person) => person.id === father.id || person.id === brother.id
-        ? { ...person, alive: false, diedYearsAgo: 1 }
-        : person),
+    const fading = {
+      ...life,
+      age: 10,
+      gold: 2,
+      pendingEvent: null,
+      people: life.people.map((person) => person.id === mother.id ? { ...person, constitution: 4 } : person),
     }
-    const inherited = chooseOption(alone, 'haggle', undefined, zero)
-    assert.equal(inherited.gold, 11)
-    assert.equal(inherited.pendingOutcome?.log, `The fever takes ${mother.name} dies. You inherit 8 gold.`)
+    const failed = ageUp(fading, [], defaultConfig(), () => 0.99)
+    const gone = failed.people.find((person) => person.id === mother.id)
+    assert.equal(gone?.alive, false)
+    assert.equal(gone?.constitution, 0)
+    assert.equal(failed.people.find((person) => person.id === father.id)?.constitution, 50)
+    assert.equal(failed.gold, 11)
+    assert.equal(failed.occupation?.title, 'Vagrant')
+    assert.equal(failed.occupation?.salary, 1)
+    assert.ok(failed.log.some((entry) => entry.text === `${mother.name}, your mother, dies as her constitution fails. You inherit 8 gold.`))
   })
 
   it('copies a relative\'s job and can change age, race, and class', () => {
@@ -231,13 +249,13 @@ describe('fantasylife engine', () => {
     assert.equal(failed.people.find((person) => person.id === mother.id)?.alive, false)
     assert.equal(failed.people.find((person) => person.id === mother.id)?.diedYearsAgo, 0)
     assert.equal(failed.people.find((person) => person.id === father.id)?.alive, true)
-    assert.equal(failed.pendingOutcome?.log, `The dragon takes ${mother.name} dies.`)
-    assert.equal(failed.log.at(-1)?.text, `The dragon takes ${mother.name} dies.`)
+    assert.equal(failed.pendingOutcome?.log, `The dragon takes ${mother.name} dies. You inherit 8 gold.`)
+    assert.equal(failed.log.at(-1)?.text, `The dragon takes ${mother.name} dies. You inherit 8 gold.`)
 
     const passed = chooseOption({ ...life, age: 20, pendingEvent: attack }, 'haggle', undefined, () => 0.5)
     assert.equal(passed.people.find((person) => person.id === father.id)?.alive, false)
     assert.equal(passed.people.find((person) => person.id === mother.id)?.alive, true)
-    assert.equal(passed.pendingOutcome?.log, `You drive it off before ${father.name} dies.`)
+    assert.equal(passed.pendingOutcome?.log, `You drive it off before ${father.name} dies. You inherit 8 gold.`)
 
     const spaced = {
       ...attack,
@@ -312,7 +330,7 @@ describe('fantasylife engine', () => {
     assert.equal(failed.people.find((person) => person.id === father.id)?.alive, false)
     assert.equal(failed.people.find((person) => person.id === brother.id)?.alive, false)
     assert.equal(failed.people.find((person) => person.id === friend.id)?.alive, true)
-    assert.equal(failed.pendingOutcome?.log, `The fire takes ${mother.name} dies. ${father.name} dies. Bram Hale dies.`)
+    assert.equal(failed.pendingOutcome?.log, `The fire takes ${mother.name} dies. ${father.name} dies. Bram Hale dies. You inherit 8 gold. You inherit 8 gold.`)
   })
 
   it('kills a random living relative when the mother is already dead', () => {
@@ -335,7 +353,7 @@ describe('fantasylife engine', () => {
     assert.equal(first.people.find((person) => person.id === mother.id)?.alive, false)
     assert.equal(first.people.find((person) => person.id === father.id)?.alive, false)
     assert.equal(first.people.find((person) => person.id === brother.id)?.alive, true)
-    assert.equal(first.pendingOutcome?.log, `The fever takes ${father.name} dies.`)
+    assert.equal(first.pendingOutcome?.log, `The fever takes ${father.name} dies. You inherit 8 gold.`)
 
     const last = chooseOption(withKin, 'haggle', undefined, () => 0.99)
     assert.equal(last.people.find((person) => person.id === sister.id)?.alive, false)
@@ -368,12 +386,12 @@ describe('fantasylife engine', () => {
     const first = chooseOption(waiting, 'haggle', undefined, zero)
     assert.equal(first.people.find((person) => person.id === mother.id)?.alive, false)
     assert.equal(first.people.find((person) => person.id === father.id)?.alive, true)
-    assert.equal(first.pendingOutcome?.log, `A quarrel ends when ${mother.name} dies.`)
+    assert.equal(first.pendingOutcome?.log, `A quarrel ends when ${mother.name} dies. You inherit 8 gold.`)
 
     const second = chooseOption(waiting, 'haggle', undefined, () => 0.5)
     assert.equal(second.people.find((person) => person.id === father.id)?.alive, false)
     assert.equal(second.people.find((person) => person.id === mother.id)?.alive, true)
-    assert.equal(second.pendingOutcome?.log, `A quarrel ends when ${father.name} dies.`)
+    assert.equal(second.pendingOutcome?.log, `A quarrel ends when ${father.name} dies. You inherit 8 gold.`)
   })
 
   it('uses a parent name and a random matching relative', () => {
@@ -410,7 +428,7 @@ describe('fantasylife engine', () => {
     assert.equal(told.people.find((person) => person.id === mother.id)?.alive, false)
     assert.equal(told.people.find((person) => person.id === nia.id)?.alive, true)
     assert.equal(told.pendingOutcome?.title, `${mother.name} at the gate`)
-    assert.equal(told.pendingOutcome?.log, `${mother.name} sees Nia Hale when ${mother.name} dies.`)
+    assert.equal(told.pendingOutcome?.log, `${mother.name} sees Nia Hale when ${mother.name} dies. You inherit 8 gold.`)
 
     const caps = chooseOption({
       ...withSisters,
@@ -559,6 +577,24 @@ describe('fantasylife engine', () => {
     assert.equal(street.house, null)
     assert.equal(street.gold, 5000)
     assert.equal(street.log.at(-1)?.text, 'You live on the street.')
+  })
+
+  it('uses Vagrant when no job is selected once work is allowed', () => {
+    const child = ageUp({ ...born(), age: 4, pendingEvent: null }, [], defaultConfig(), zero)
+    assert.equal(child.age, 5)
+    assert.equal(child.occupation, null)
+    assert.equal(child.gold, 0)
+
+    const worker = ageUp({ ...born(), age: 5, gold: 4, pendingEvent: null }, [], defaultConfig(), zero)
+    assert.equal(worker.age, 6)
+    assert.equal(worker.occupation?.title, 'Vagrant')
+    assert.equal(worker.occupation?.salary, 1)
+    assert.equal(worker.gold, 5)
+    assert.equal(worker.log.some((entry) => entry.text === 'You earn 1 gold for the year as a Vagrant.'), true)
+
+    const asked = askForGold({ ...worker, pendingOutcome: null }, () => 0.99)
+    assert.equal(asked.occupation?.title, 'Vagrant')
+    assert.equal(asked.occupation?.salary, 2)
   })
 
   it('gives parents a trade and pays that salary each year', () => {

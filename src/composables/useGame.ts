@@ -9,6 +9,7 @@ import {
   childhoodAction,
   chooseOption,
   createLife,
+  ensureParentBodies,
   dismissOutcome,
   askForGold,
   changeSubject,
@@ -106,12 +107,14 @@ const gameKey: InjectionKey<GameStore> = Symbol('fantasylife')
 
 export function provideGame(): GameStore {
   for (const key of RETIRED_EVENT_KEYS) localStorage.removeItem(key)
+  const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
   const savedLife = sanitizeLife(read(LIFE_KEY))
-  const life = ref<Life | null>(savedLife)
+  const preparedLife = savedLife ? ensureParentBodies(savedLife, config.value) : null
+  const life = ref<Life | null>(preparedLife)
+  if (preparedLife && preparedLife !== savedLife) write(LIFE_KEY, preparedLife)
   const lastDeath = ref<LastDeath | null>(deathOf(savedLife) ?? readLastDeath(read(LAST_DEATH_KEY)))
   const events = ref<GameEventConfig[]>([])
   const pools = ref<string[]>([])
-  const config = ref<GameConfig>(sanitizeConfig(read(CONFIG_KEY)))
   const hasLife = computed(() => life.value !== null)
   const ledgerNotice = ref<{ ok: boolean; text: string } | null>(null)
   let revision = 0

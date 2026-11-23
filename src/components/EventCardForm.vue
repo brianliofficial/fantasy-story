@@ -162,8 +162,6 @@ const eventCopy = computed(() => [
   ...props.event.options.flatMap((option) => [option.text, option.success.log, option.failure?.log ?? '']),
 ].join('\n'))
 const hasKinName = computed(() => /\[(mother|father|brother|sister|sibling|friend)(?:_job)?\]/i.test(eventCopy.value))
-const hasKinDeath = computed(() => /\[(mother|father|brother|sister|sibling|friend|wholefamily)_die\]/i.test(eventCopy.value))
-
 function checkValue(option: EventOption): string {
   const mode = checkMode.value[option.id]
   if (mode === 'work' || option.workWith) return 'work'
@@ -269,19 +267,10 @@ function setIdentityAge(optionId: string, raw: string) {
   updateOption(optionId, { setAge: Math.min(120, Number(raw)) })
 }
 
-function toggleKin(key: 'nameStandIn' | 'heirs', role: HeirRole) {
-  const current = props.event[key] ?? []
+function toggleStandIn(role: HeirRole) {
+  const current = props.event.nameStandIn ?? []
   const next = current.includes(role) ? current.filter((item) => item !== role) : [...current, role]
-  update({ [key]: next.length > 0 ? next : undefined })
-}
-
-const heirChoices = computed(() => HEIR_ROLES.filter((role) => !props.event.heirs?.includes(role)))
-
-function addHeir(raw: string) {
-  if (!HEIR_ROLES.includes(raw as HeirRole)) return
-  const role = raw as HeirRole
-  if (props.event.heirs?.includes(role)) return
-  update({ heirs: [...(props.event.heirs ?? []), role] })
+  update({ nameStandIn: next.length > 0 ? next : undefined })
 }
 
 const poolOptions = computed(() => (
@@ -344,7 +333,7 @@ const poolBand = computed(() => agePoolFor(props.event.type))
     <section v-if="hasKinName">
       <p class="hint">If that character does not exist, use one of these people instead.</p>
       <div class="toggle-row">
-        <button v-for="role in HEIR_ROLES" :key="`stand-${role}`" type="button" class="pill" :class="{ 'is-selected': event.nameStandIn?.includes(role) }" @click="toggleKin('nameStandIn', role)">{{ role }}</button>
+        <button v-for="role in HEIR_ROLES" :key="`stand-${role}`" type="button" class="pill" :class="{ 'is-selected': event.nameStandIn?.includes(role) }" @click="toggleStandIn(role)">{{ role }}</button>
       </div>
       <p class="hint">If none of them exist, a random person is shown.</p>
     </section>
@@ -453,22 +442,6 @@ const poolBand = computed(() => agePoolFor(props.event.type))
       </div>
     </section>
     </div>
-    <section v-if="hasKinDeath" class="heir-block">
-      <p class="hint">Who inherits this character's wealth?</p>
-      <label v-if="heirChoices.length > 0" class="field">Heir
-        <select value="" @change="addHeir(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
-          <option value="">Choose</option>
-          <option v-for="role in heirChoices" :key="role" :value="role">{{ role }}</option>
-        </select>
-      </label>
-      <div v-if="event.heirs?.length" class="tag-row">
-        <span v-for="role in event.heirs" :key="role" class="heir-tag">
-          {{ role }}
-          <button type="button" :aria-label="`Remove ${role}`" @click="toggleKin('heirs', role)">×</button>
-        </span>
-      </div>
-      <p class="hint">The wealth is split into one share for each person you choose. Shares with nobody to take them come to you. If none of them exist, you inherit it.</p>
-    </section>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <div class="choice-row">
       <button type="button" class="btn btn-primary" @click="emit('save', event)">Save card</button>
@@ -594,33 +567,4 @@ const poolBand = computed(() => agePoolFor(props.event.type))
 }
 
 .effect-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-
-.heir-block { display: flex; flex-direction: column; gap: 8px; }
-
-.tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.heir-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 4px 8px 4px 14px;
-  border: 1px solid var(--gold);
-  border-radius: 999px;
-  background: #1b1511;
-  font-family: Cinzel, Georgia, serif;
-  font-weight: 700;
-
-  button {
-    width: 22px;
-    height: 22px;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    color: inherit;
-    font-size: 1rem;
-    line-height: 1;
-    padding: 0;
-  }
-}
 </style>

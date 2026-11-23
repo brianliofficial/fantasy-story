@@ -16,6 +16,7 @@ import {
   VAGRANT_TITLE,
 } from './childhood'
 import { agePoolFor } from './age'
+import { birthHome } from './birthHome'
 import { HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
 import { uid } from './id'
 import { cleanNamePart, pickDistinct, randomIdentity } from './names'
@@ -129,10 +130,18 @@ export function createLife(
     ))
   }
   const trades = tradesFor(input.socialClass)
-  const people = [mother, father, ...siblings].map((person) => {
+  const raised = [mother, father, ...siblings].map((person) => {
     if (person.role !== 'parent') return person
     const trade = trades[randomInt(random, 0, trades.length - 1)] ?? trades[0]
     return trade ? { ...person, occupation: trade.parent } : person
+  })
+  const people = raised.map((person) => {
+    if (person.role !== 'parent') return person
+    return {
+      ...person,
+      constitution: clampScore(randomInt(random, 50, 100) + bonus.constitution),
+      gold: salaryFor(person.occupation ?? ''),
+    }
   })
   return {
     id: uid(),
@@ -158,7 +167,10 @@ export function createLife(
     betrothed: null,
     crime: false,
     duty: 'ready',
-    log: [entry(0, `You are a ${input.gender} ${input.socialClass.toLowerCase()} ${input.race.toLowerCase()} named ${name}. Your mother is ${motherName}. Your father is ${fatherName}.`)],
+    log: [
+      entry(0, `You are a ${input.gender} ${input.socialClass.toLowerCase()} ${input.race.toLowerCase()} named ${name}. Your mother is ${motherName}. Your father is ${fatherName}.`),
+      entry(0, birthHome(input.race, input.socialClass, random)),
+    ],
     alive: true,
     deathReason: null,
     pendingEvent: null,
@@ -270,24 +282,62 @@ function poolOpen(type: string, age: number, config: GameConfig, socialClass: So
   return true
 }
 
-function agePeople(life: Life, years: number): Person[] {
-  return life.people.map((person) => {
-    if (!person.alive) return { ...person, diedYearsAgo: (person.diedYearsAgo ?? 0) + years }
-    const age = person.age + years
-    if (age >= 80) {
-      return { ...person, age, alive: false, diedYearsAgo: 0 }
-    }
-    return { ...person, age }
+export function ensureParentBodies(life: Life, config: GameConfig, random: () => number = Math.random): Life {
+  let changed = false
+  const people = life.people.map((person) => {
+    if (person.role !== 'parent') return person
+    const constitution = typeof person.constitution === 'number'
+      ? person.constitution
+      : clampScore(randomInt(random, 50, 100) + config.races[life.race].constitution)
+    const gold = typeof person.gold === 'number' ? person.gold : salaryFor(person.occupation ?? '')
+    if (constitution === person.constitution && gold === person.gold) return person
+    changed = true
+    return { ...person, constitution, gold }
   })
+  return changed ? { ...life, people } : life
 }
 
-function deathNotices(before: Person[], after: Person[]): string[] {
-  return before.flatMap((person) => {
-    if (!person.alive) return []
-    const aged = after.find((item) => item.id === person.id)
-    if (!aged || aged.alive) return []
-    return [`${aged.name}, your ${person.label.toLowerCase()}, dies peacefully at ${aged.age}.`]
+function carriedGold(person: Person): number {
+  if (typeof person.gold === 'number') return Math.max(0, Math.round(person.gold))
+  return salaryFor(person.occupation ?? '')
+}
+
+function agePeople(
+  life: Life,
+  years: number,
+  random: () => number,
+  config: GameConfig,
+): { people: Person[]; gold: number; notices: string[] } {
+  let gold = 0
+  const notices: string[] = []
+  const people = life.people.map((person) => {
+    if (!person.alive) return { ...person, diedYearsAgo: (person.diedYearsAgo ?? 0) + years }
+    const age = person.age + years
+    let next: Person = { ...person, age }
+    if (person.role === 'parent') {
+      const start = typeof person.constitution === 'number'
+        ? person.constitution
+        : clampScore(randomInt(random, 50, 100) + config.races[life.race].constitution)
+      const loss = randomInt(random, 0, 5)
+      next = { ...next, constitution: Math.max(0, start - loss), gold: carriedGold(person) }
+    }
+    const wornOut = person.role === 'parent' && next.constitution === 0
+    if (age < 80 && !wornOut) return next
+    const purse = carriedGold(next)
+    const relation = person.label.toLowerCase()
+    const possessive = person.gender === 'female' ? 'her' : 'his'
+    const cause = wornOut
+      ? `${person.name}, your ${relation}, dies as ${possessive} constitution fails.`
+      : `${person.name}, your ${relation}, dies peacefully at ${age}.`
+    if (purse > 0) {
+      gold += purse
+      notices.push(`${cause} You inherit ${purse} gold.`)
+    } else {
+      notices.push(cause)
+    }
+    return { ...next, gold: 0, alive: false, diedYearsAgo: 0 }
   })
+  return { people, gold, notices }
 }
 
 function die(life: Life, reason: string): Life {
@@ -313,21 +363,23 @@ export function ageUp(
   }
 
   const age = life.age + 1
-  const agedPeople = agePeople(life, 1)
-  const notices = deathNotices(life.people, agedPeople)
+  const aged = agePeople(life, 1, random, config)
   let next: Life = {
     ...life,
     age,
-    people: agedPeople,
+    people: aged.people,
+    gold: life.gold + aged.gold,
     usedThisYear: [],
-    log: [...life.log, ...notices.map((text) => entry(age, text))],
+    log: [...life.log, ...aged.notices.map((text) => entry(age, text))],
   }
-  if (next.occupation && next.occupation.salary > 0) {
-    const pay = next.occupation.salary
+  const job = next.occupation ?? (ofWorkingAge(next, config) ? { title: VAGRANT_TITLE, salary: VAGRANT_SALARY } : null)
+  if (job && job.salary > 0) {
+    const pay = job.salary
     next = {
       ...next,
+      occupation: job,
       gold: next.gold + pay,
-      log: [...next.log, entry(age, `You earn ${pay} gold for the year as ${article(next.occupation.title)} ${next.occupation.title}.`)],
+      log: [...next.log, entry(age, `You earn ${pay} gold for the year as ${article(job.title)} ${job.title}.`)],
     }
   }
   if (age >= config.aging.startAge) {
@@ -400,7 +452,7 @@ export function chooseOption(
   if (option.clearHouse) next = { ...next, house: null }
   next = applyWorkWith(next, option.workWith, life.pendingEvent.nameStandIn ?? [], random)
   next = applyIdentity(next, option)
-  const told = applyOutcomeLog(next, outcome.log, random, life.pendingEvent.nameStandIn ?? [], life.pendingEvent.heirs ?? [])
+  const told = applyOutcomeLog(next, outcome.log, random, life.pendingEvent.nameStandIn ?? [])
   next = {
     ...told.life,
     pendingEvent: null,
@@ -642,29 +694,18 @@ export function nameKin(text: string, life: Life, random: () => number = Math.ra
   })
 }
 
-function inheritance(life: Life, deaths: Set<string>, heirs: HeirRole[], random: () => number): { gold: number; note: string } {
-  if (heirs.length === 0 || deaths.size === 0) return { gold: 0, note: '' }
-  const estate = life.people
-    .filter((person) => deaths.has(person.id))
-    .reduce((sum, person) => sum + salaryFor(person.occupation ?? ''), 0)
-  if (estate <= 0) return { gold: 0, note: '' }
-  const base = Math.floor(estate / heirs.length)
-  let leftover = estate - base * heirs.length
-  let player = 0
+function inheritance(life: Life, deaths: Set<string>): { gold: number; note: string } {
+  if (deaths.size === 0) return { gold: 0, note: '' }
   const notes: string[] = []
-  heirs.forEach((role) => {
-    const person = pickKin(kinMatches(life, role).filter((item) => item.alive && !deaths.has(item.id)), role, random)
-    if (!person) {
-      player += base
-      return
-    }
-    const share = base + leftover
-    leftover = 0
-    notes.push(`${person.name} inherits ${share} gold`)
+  let gold = 0
+  life.people.forEach((person) => {
+    if (!deaths.has(person.id)) return
+    const purse = carriedGold(person)
+    if (purse <= 0) return
+    gold += purse
+    notes.push(`You inherit ${purse} gold`)
   })
-  player += leftover
-  if (player > 0) notes.push(`You inherit ${player} gold`)
-  return { gold: player, note: notes.length > 0 ? `${notes.join('. ')}.` : '' }
+  return { gold, note: notes.length > 0 ? `${notes.join('. ')}.` : '' }
 }
 
 function applyOutcomeLog(
@@ -672,7 +713,6 @@ function applyOutcomeLog(
   text: string,
   random: () => number,
   standIn: HeirRole[] = [],
-  heirs: HeirRole[] = [],
 ): { life: Life; text: string } {
   const deaths = new Set<string>()
   const resolved = nameKin(text.replace(/\[(mother|father|brother|sister|sibling|friend|wholefamily)_die\]/gi, (mark, token: string) => {
@@ -689,11 +729,11 @@ function applyOutcomeLog(
     deaths.add(living.id)
     return `${living.name} dies`
   }), life, random, standIn)
-  const willed = inheritance(life, deaths, heirs, random)
+  const willed = inheritance(life, deaths)
   const told = willed.note ? `${resolved} ${willed.note}` : resolved
   if (deaths.size === 0 && willed.gold === 0) return { life, text: told }
   const people = life.people.map((person) => (
-    deaths.has(person.id) ? { ...person, alive: false, diedYearsAgo: 0 } : person
+    deaths.has(person.id) ? { ...person, alive: false, diedYearsAgo: 0, gold: 0 } : person
   ))
   const next = { ...life, people, gold: life.gold + willed.gold }
   return { life: { ...next, parentRelationship: averageParentScore(next) }, text: told }
@@ -1148,12 +1188,9 @@ export function takeJob(life: Life, title: string, config?: GameConfig): Life {
 
 export function askForGold(life: Life, random: () => number = Math.random, config?: GameConfig): Life {
   if (!ofWorkingAge(life, config)) return life
-  if (!life.occupation) {
-    const log = 'You have no job to ask wages from.'
-    return conclude(life, {}, { title: 'Ask for more gold', log, passed: false })
-  }
+  const current = life.occupation ?? { title: VAGRANT_TITLE, salary: VAGRANT_SALARY }
   const cap = payCap(life.socialClass)
-  if (life.occupation.salary >= cap) {
+  if (current.salary >= cap) {
     const log = 'Your wages are already as high as this work allows.'
     return conclude(life, {}, { title: 'Ask for more gold', log, passed: false })
   }
@@ -1166,16 +1203,16 @@ export function askForGold(life: Life, random: () => number = Math.random, confi
     const log = 'They refuse to pay you any more.'
     return conclude(life, {}, { title: 'Ask for more gold', log, passed: false, roll })
   }
-  const salary = Math.min(cap, life.occupation.salary + raiseStep(life.socialClass))
+  const salary = Math.min(cap, current.salary + raiseStep(life.socialClass))
   const log = `Your pay rises to ${salary} gold per year.`
   return conclude(life, {
-    occupation: { title: life.occupation.title, salary },
+    occupation: { title: current.title, salary },
   }, {
     title: 'Ask for more gold',
     log,
     passed: true,
     roll,
-    changes: jobChanges(life.occupation.title, salary),
+    changes: jobChanges(current.title, salary),
   })
 }
 
