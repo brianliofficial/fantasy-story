@@ -204,21 +204,9 @@ describe('fantasylife engine', () => {
     assert.deepEqual(failed.pendingLoss, [`${mother.name}, your mother, dies as her constitution fails. You inherit 8 gold.`])
   })
 
-  it('copies a relative\'s job and can change age, race, and class', () => {
+  it('can change age, race, and class', () => {
     const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
     const life = born()
-    const mother = life.people.find((person) => person.label === 'Mother')
-    assert.ok(mother?.occupation)
-    const working = {
-      ...market,
-      options: market.options.map((option) => option.id === 'haggle'
-        ? { ...option, checkStat: undefined, workWith: 'mother' as const, success: { log: 'You take up the work.', effect: {} } }
-        : option),
-    }
-    const hired = chooseOption({ ...life, age: 20, pendingEvent: working }, 'haggle', undefined, zero)
-    assert.equal(hired.occupation?.title, mother.occupation)
-    assert.equal(hired.occupation?.salary, 8)
-
     const changed = {
       ...market,
       options: market.options.map((option) => option.id === 'haggle'
@@ -823,50 +811,31 @@ describe('fantasylife engine', () => {
     assert.equal(later.pendingEvent?.id, 'field')
   })
 
-  it('forces the teenage milestone and resolves study by class', () => {
+  it('forces the teenage milestone and takes a job only at constitution 100', () => {
     const config = defaultConfig()
-    const schooling = { ...born(), age: 15, school: 'Reading', tutorRelationship: 81 }
+    const schooling = { ...born(), age: 15, school: 'Reading', constitution: 100 }
     const milestone = ageUp(schooling, [teenageMilestone()], config, zero)
     assert.equal(milestone.age, 16)
     assert.equal(milestone.pendingEvent?.id, 'Milestone_event_2_teenage')
     assert.equal(milestone.log.at(-1)?.text, 'You reach the end of your basic education.')
 
-    const kept = chooseOption(milestone, 'continue', config, zero)
-    assert.equal(kept.school, 'Reading')
-    assert.equal(kept.log.at(-1)?.text, 'Your teacher is happy to continue teaching you in Reading.')
+    const hired = chooseOption(milestone, 'Farmer', config, zero)
+    assert.equal(hired.occupation?.title, 'Farmer')
+    assert.equal(hired.occupation?.salary, 8)
+    assert.equal(hired.log.at(-1)?.text, 'You find work as a Farmer.')
 
-    const limited = chooseOption({ ...milestone, tutorRelationship: 80 }, 'continue', config, zero)
-    assert.equal(limited.school, null)
-    assert.equal(limited.log.at(-1)?.text, 'Your teacher has reached the limit of their generosity.')
+    const weak = chooseOption({ ...milestone, constitution: 99 }, 'Farmer', config, zero)
+    assert.equal(weak.occupation?.title, 'Vagrant')
+    assert.equal(weak.log.at(-1)?.text, 'Your constitution is not 100, so you cannot take this job.')
 
     const merchant = ageUp({
       ...born({ socialClass: 'Merchant' }),
       age: 15,
-      school: 'Letters',
-      parentRelationship: 51,
+      constitution: 100,
     }, [teenageMilestone()], config, zero)
-    const covered = chooseOption(merchant, 'continue', config, zero)
-    assert.equal(covered.merchantJobs, true)
-    assert.equal(covered.school, 'Letters')
-    assert.equal(covered.log.at(-1)?.text, 'Your parents cover the fees.')
-    const refused = chooseOption({ ...merchant, parentRelationship: 50 }, 'continue', config, zero)
-    assert.equal(refused.merchantJobs, true)
-    assert.equal(refused.log.at(-1)?.text, 'Your parents refuse to cover the fees.')
-
-    const noble = ageUp({
-      ...born({ socialClass: 'Noble', gender: 'female' }),
-      age: 15,
-      school: 'Rhetoric',
-    }, [teenageMilestone()], config, zero)
-    const betrothed = chooseOption(noble, 'continue', config, zero)
-    assert.equal(betrothed.school, null)
-    assert.equal(betrothed.betrothed?.job, 'Knight')
-    assert.equal(betrothed.betrothed?.forename, 'Aldric')
-    assert.equal(betrothed.betrothed?.surname, 'Harwick')
-    assert.equal(
-      betrothed.log.at(-1)?.text,
-      'Your parents have betrothed you to Knight Aldric Harwick and expect you to focus on preparing to marry him, not an education.',
-    )
+    const trader = chooseOption(merchant, 'Trader', config, zero)
+    assert.equal(trader.occupation?.title, 'Trader')
+    assert.equal(trader.occupation?.salary, 180)
   })
 
   it('draws a pool event at age 6', () => {

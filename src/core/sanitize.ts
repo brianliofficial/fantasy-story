@@ -6,7 +6,6 @@ import type {
   CheckStat,
   EventOption,
   HeirRole,
-  KinRole,
   GameConfig,
   GameEventConfig,
   AgeWindow,
@@ -26,7 +25,7 @@ import type {
   StatChange,
   YearActivity,
 } from './types'
-import { CHECK_STATS, CLASSES, GENDERS, HEIR_ROLES, KIN_ROLES, MAX_AGE, RACES } from './types'
+import { CHECK_STATS, CLASSES, GENDERS, HEIR_ROLES, MAX_AGE, RACES } from './types'
 
 function isRace(value: unknown): value is Race {
   return RACES.includes(value as Race)
@@ -40,10 +39,6 @@ function genderList(value: unknown): Gender[] | undefined {
   if (!Array.isArray(value)) return undefined
   const genders = value.filter((item): item is Gender => GENDERS.includes(item as Gender))
   return genders.length > 0 ? genders : undefined
-}
-
-function isKinRole(value: unknown): value is KinRole {
-  return KIN_ROLES.includes(value as KinRole)
 }
 
 function isHeirRole(value: unknown): value is HeirRole {
@@ -98,7 +93,6 @@ function sanitizeOption(value: unknown): EventOption | null {
   if (typeof value.goldCost === 'number' && Number.isFinite(value.goldCost) && value.goldCost > 0) {
     option.goldCost = Math.max(1, Math.min(100000, Math.round(value.goldCost)))
   }
-  if (isKinRole(value.workWith)) option.workWith = value.workWith
   const age = readAge(value.setAge)
   if (typeof age === 'number') option.setAge = age
   if (isRace(value.setRace)) option.setRace = value.setRace

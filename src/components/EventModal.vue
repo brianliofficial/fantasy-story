@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { tradesFor } from '../core/childhood'
+import { TEENAGE_ID } from '../core/defaults'
 import { nameKin } from '../core/engine'
 import type { GameEventConfig, Life } from '../core/types'
 
@@ -7,11 +9,13 @@ const emit = defineEmits<{ choose: [optionId: string] }>()
 const standIn = props.event.nameStandIn ?? []
 const title = nameKin(props.event.title, props.life, Math.random, standIn)
 const description = nameKin(props.event.description, props.life, Math.random, standIn)
-const options = props.event.options.map((option) => ({
-  id: option.id,
-  text: nameKin(option.text, props.life, Math.random, standIn),
-  cost: option.goldCost ?? 0,
-}))
+const options = props.event.id === TEENAGE_ID
+  ? tradesFor(props.life.socialClass).map((trade) => ({ id: trade.child, text: trade.child, cost: 0 }))
+  : props.event.options.map((option) => ({
+    id: option.id,
+    text: nameKin(option.text, props.life, Math.random, standIn),
+    cost: option.goldCost ?? 0,
+  }))
 function unaffordable(cost: number): boolean {
   return cost > props.life.gold
 }
@@ -23,6 +27,7 @@ function unaffordable(cost: number): boolean {
       <p class="badge">{{ event.type }}</p>
       <h2 id="event-title">{{ title }}</h2>
       <p>{{ description }}</p>
+      <p v-if="event.id === TEENAGE_ID" class="hint">Your constitution must be 100 to take a job.</p>
       <button
         v-for="option in options"
         :key="option.id"

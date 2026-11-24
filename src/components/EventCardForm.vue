@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { agePoolFor } from '../core/age'
 import { uid } from '../core/id'
 import { cloneData } from '../core/clone'
-import type { CheckStat, EventOption, GameEventConfig, Gender, HeirRole, KinRole, Race, SocialClass, StatChange } from '../core/types'
-import { CHECK_STATS, CLASSES, GENDERS, HEIR_ROLES, KIN_ROLES, RACES } from '../core/types'
+import type { CheckStat, EventOption, GameEventConfig, Gender, HeirRole, Race, SocialClass, StatChange } from '../core/types'
+import { CHECK_STATS, CLASSES, GENDERS, HEIR_ROLES, RACES } from '../core/types'
 
 const props = defineProps<{ event: GameEventConfig; error?: string; pools: string[] }>()
 const emit = defineEmits<{ change: [event: GameEventConfig]; save: [event: GameEventConfig]; remove: [id: string] }>()
@@ -161,7 +161,7 @@ function setRepeatAfter(raw: string) {
 }
 
 const goldMode = ref<Record<string, boolean>>({})
-const checkMode = ref<Record<string, 'work' | 'race'>>({})
+const checkMode = ref<Record<string, 'race'>>({})
 
 const eventCopy = computed(() => [
   props.event.title,
@@ -171,14 +171,13 @@ const eventCopy = computed(() => [
 const hasKinName = computed(() => /\[(mother|father|brother|sister|sibling|friend)(?:_job)?\]/i.test(eventCopy.value))
 function checkValue(option: EventOption): string {
   const mode = checkMode.value[option.id]
-  if (mode === 'work' || option.workWith) return 'work'
   if (mode === 'race' || option.setAge != null || option.setRace || option.setClass) return 'race'
   if (goldMode.value[option.id] || option.goldCost != null) return 'gold'
   if (option.checkLuck) return 'luck'
   return option.checkStat ?? ''
 }
 
-function rememberMode(optionId: string, mode?: 'work' | 'race') {
+function rememberMode(optionId: string, mode?: 'race') {
   const next = { ...checkMode.value }
   if (mode) next[optionId] = mode
   else delete next[optionId]
@@ -203,7 +202,6 @@ function setCheck(optionId: string, value: string) {
     checkLuck: undefined,
     checkStat: undefined,
     goldCost: undefined,
-    workWith: undefined,
     setAge: undefined,
     setRace: undefined,
     setClass: undefined,
@@ -211,16 +209,6 @@ function setCheck(optionId: string, value: string) {
   if (value === 'gold') {
     goldMode.value = { ...goldMode.value, [optionId]: true }
     rememberMode(optionId)
-    updateOption(optionId, cleared)
-    return
-  }
-  if (value === 'work') {
-    rememberMode(optionId, 'work')
-    if (goldMode.value[optionId]) {
-      const next = { ...goldMode.value }
-      delete next[optionId]
-      goldMode.value = next
-    }
     updateOption(optionId, cleared)
     return
   }
@@ -259,10 +247,6 @@ function setCheck(optionId: string, value: string) {
     threshold: option.threshold ?? 50,
     failure,
   })
-}
-
-function setWorkWith(optionId: string, value: string) {
-  updateOption(optionId, { workWith: KIN_ROLES.includes(value as KinRole) ? value as KinRole : undefined })
 }
 
 function setIdentityAge(optionId: string, raw: string) {
@@ -383,19 +367,12 @@ const poolBand = computed(() => agePoolFor(props.event.type))
             <option value="">None</option>
             <option value="luck">Luck</option>
             <option value="gold">gold</option>
-            <option value="work">work with</option>
             <option value="race">race changed</option>
             <option v-for="stat in CHECK_STATS" :key="stat" :value="stat">{{ stat }}</option>
           </select>
         </label>
         <label v-if="checkValue(current) === 'gold'" class="field">Gold cost
           <input :value="current.goldCost ?? ''" type="number" min="1" max="100000" @input="setGoldCost(current.id, ($event.target as HTMLInputElement).value)" />
-        </label>
-        <label v-if="checkValue(current) === 'work'" class="field">Relationship
-          <select :value="current.workWith ?? ''" @change="setWorkWith(current.id, ($event.target as HTMLSelectElement).value)">
-            <option value="">Choose</option>
-            <option v-for="role in KIN_ROLES" :key="role" :value="role">{{ role }}</option>
-          </select>
         </label>
         <template v-if="checkValue(current) === 'race'">
           <label class="field">Age

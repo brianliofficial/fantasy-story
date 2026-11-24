@@ -28,7 +28,6 @@ export interface EventOption {
   checkStat?: CheckStat
   checkLuck?: boolean
   goldCost?: number
-  workWith?: KinRole
   setAge?: number
   setRace?: Race
   setClass?: SocialClass

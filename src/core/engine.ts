@@ -23,7 +23,6 @@ import { uid } from './id'
 import { cleanNamePart, pickDistinct, randomIdentity } from './names'
 import type {
   AgeWindow,
-  Betrothal,
   CheckStat,
   ChildhoodAction,
   EventOption,
@@ -32,7 +31,6 @@ import type {
   Gender,
   HeirRole,
   InfantAction,
-  KinRole,
   Life,
   LogEntry,
   NewCharacter,
@@ -443,11 +441,11 @@ function statValue(life: Life, stat: CheckStat): number {
 export function chooseOption(
   life: Life,
   optionId: string,
-  config?: GameConfig,
+  _config?: GameConfig,
   random: () => number = Math.random,
 ): Life {
   if (!life.alive || !life.pendingEvent) return life
-  if (life.pendingEvent.id === TEENAGE_ID) return resolveTeenage(life, config, random)
+  if (life.pendingEvent.id === TEENAGE_ID) return resolveTeenage(life, optionId)
   const option = life.pendingEvent.options.find((item) => item.id === optionId)
   if (!option) return life
   const cost = option.goldCost ?? 0
@@ -470,7 +468,6 @@ export function chooseOption(
   const paid = cost > 0 ? { ...life, gold: life.gold - cost } : life
   let next = applyEffect(paid, outcome.effect)
   if (option.clearHouse) next = { ...next, house: null }
-  next = applyWorkWith(next, option.workWith, life.pendingEvent.nameStandIn ?? [], random)
   next = applyIdentity(next, option)
   const told = applyOutcomeLog(next, outcome.log, random, life.pendingEvent.nameStandIn ?? [])
   next = {
@@ -767,18 +764,6 @@ function applyOutcomeLog(
   ))
   const next = { ...life, people, gold: life.gold + willed.gold }
   return { life: { ...next, parentRelationship: averageParentScore(next) }, text: told }
-}
-
-function applyWorkWith(life: Life, role: KinRole | undefined, standIn: HeirRole[], random: () => number): Life {
-  if (!role) return life
-  const matches = kinMatches(life, role)
-  const person = pickKin(livingFirst(matches), role, random) ?? (matches.length === 0 ? standInPerson(life, standIn, random) : undefined)
-  if (!person?.occupation) return life
-  const known = salaryFor(person.occupation)
-  return {
-    ...life,
-    occupation: { title: person.occupation, salary: known || life.occupation?.salary || 0 },
-  }
 }
 
 function applyIdentity(life: Life, option: EventOption): Life {
@@ -1155,51 +1140,23 @@ function inSchoolYears(life: Life, config?: GameConfig): boolean {
   return life.alive && !waiting(life) && menuOpen(window, life.age)
 }
 
-function tutorScore(life: Life): number {
-  if (typeof life.tutorRelationship === 'number') return life.tutorRelationship
-  const teacher = life.people.find((person) => person.role === 'teacher' && person.alive)
-  return teacher?.relationship ?? 0
-}
-
-function resolveTeenage(life: Life, config: GameConfig | undefined, random: () => number): Life {
-  const subject = life.school ?? 'your lessons'
-  let log = 'You have no studies to continue.'
-  let school = life.school
-  let merchantJobs = life.merchantJobs
-  let betrothed = life.betrothed
-  if (life.socialClass === 'Peasant') {
-    if (tutorScore(life) > 80) log = `Your teacher is happy to continue teaching you in ${subject}.`
-    else {
-      log = 'Your teacher has reached the limit of their generosity.'
-      school = null
-    }
-  } else if (life.socialClass === 'Merchant') {
-    merchantJobs = true
-    log = life.parentRelationship > 50
-      ? 'Your parents cover the fees.'
-      : 'Your parents refuse to cover the fees.'
-  } else if (life.socialClass === 'Noble' && life.gender === 'female') {
-    const trades = tradesFor('Noble')
-    const trade = trades[randomInt(random, 0, trades.length - 1)] ?? trades[0]
-    const raceNames = config?.names[life.race]
-    const identity = raceNames
-      ? randomIdentity(raceNames, 'male', random)
-      : { forename: 'Aldric', surname: 'Hale' }
-    const match: Betrothal = {
-      job: trade?.child ?? 'Knight',
-      forename: identity.forename,
-      surname: identity.surname,
-    }
-    betrothed = match
-    school = null
-    log = `Your parents have betrothed you to ${match.job} ${match.forename} ${match.surname} and expect you to focus on preparing to marry him, not an education.`
-  } else if (life.school) {
-    log = 'You continue your studies.'
+function resolveTeenage(life: Life, optionId: string): Life {
+  const trade = tradesFor(life.socialClass).find((item) => item.child === optionId)
+  if (!trade) return life
+  if (life.constitution !== 100) {
+    return conclude(life, {}, {
+      title: 'Teenage',
+      log: 'Your constitution is not 100, so you cannot take this job.',
+      passed: false,
+    })
   }
-  return conclude(life, { school, merchantJobs, betrothed }, {
+  return conclude(life, {
+    occupation: { title: trade.child, salary: trade.salary },
+  }, {
     title: 'Teenage',
-    log,
+    log: `You find work as ${article(trade.child)} ${trade.child}.`,
     passed: true,
+    changes: jobChanges(trade.child, trade.salary),
   })
 }
 
