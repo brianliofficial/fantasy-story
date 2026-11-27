@@ -3,7 +3,7 @@ import { ledgerPools } from './pools'
 import { optionsForSave, sanitizeEvent } from './sanitize'
 import type { GameEventConfig } from './types'
 
-const EVENT_HEADERS = ['id', 'pool', 'title', 'description', 'minAge', 'maxAge', 'showLimit', 'repeatAfter', 'mandatory', 'requiredRace', 'requiredClass', 'requiredGender', 'options'] as const
+const EVENT_HEADERS = ['id', 'pool', 'title', 'description', 'minAge', 'maxAge', 'showLimit', 'repeatAfter', 'mandatory', 'possible', 'if', 'ifOp', 'ifAmount', 'requiredRace', 'requiredClass', 'requiredGender', 'options'] as const
 
 export function eventPoolWorkbook(events: GameEventConfig[], pools: string[]): Uint8Array {
   const book = XLSX.utils.book_new()
@@ -54,6 +54,10 @@ function eventToRow(event: GameEventConfig): Record<string, string | number> {
     showLimit: event.showLimit ?? '',
     repeatAfter: event.repeatAfter ?? '',
     mandatory: event.mandatory ? 'true' : '',
+    possible: event.possible ?? '',
+    if: event.gate?.stat ?? '',
+    ifOp: event.gate?.op ?? '',
+    ifAmount: event.gate?.amount ?? '',
     requiredRace: (event.requiredRace ?? []).join(', '),
     requiredClass: (event.requiredClass ?? []).join(', '),
     requiredGender: (event.requiredGender ?? []).join(', '),
@@ -84,6 +88,8 @@ function rowToEvent(row: Record<string, unknown>, rowNumber: number): GameEventC
     repeatAfter: optionalNumber(row.repeatAfter),
     requiredRace: splitList(row.requiredRace),
     mandatory: cellFlag(row.mandatory),
+    possible: optionalNumber(row.possible),
+    gate: gateFromCells(row),
     requiredClass: splitList(row.requiredClass),
     requiredGender: splitList(row.requiredGender),
     options,
@@ -119,6 +125,15 @@ function cellFlag(value: unknown): boolean {
   if (value === true || value === 1) return true
   const text = cellText(value).toLowerCase()
   return text === 'true' || text === 'yes' || text === '1'
+}
+
+function gateFromCells(row: Record<string, unknown>): { stat: string; op?: string; amount?: number } | undefined {
+  const stat = cellText(row.if)
+  if (stat !== 'gold' && stat !== 'father' && stat !== 'mother' && stat !== 'sibling' && stat !== 'brother' && stat !== 'sister') return undefined
+  const op = cellText(row.ifOp)
+  const amount = optionalNumber(row.ifAmount)
+  if ((op !== '<' && op !== '>') || amount == null) return undefined
+  return { stat, op, amount }
 }
 
 function splitList(value: unknown): string[] {

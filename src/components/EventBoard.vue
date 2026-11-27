@@ -24,6 +24,14 @@ const poolName = ref('')
 const poolError = ref('')
 const panning = ref(false)
 const moving = ref<GameEventConfig | null>(null)
+
+function ruleNote(card: GameEventConfig): string {
+  const notes: string[] = []
+  if (card.mandatory) notes.push('Mandatory')
+  else if (typeof card.possible === 'number') notes.push(`Only possible ${card.possible}%`)
+  if (card.gate?.stat && card.gate.op && card.gate.amount != null) notes.push(`${card.gate.stat} ${card.gate.op} ${card.gate.amount}`)
+  return notes.length > 0 ? ` · ${notes.join(' · ')}` : ''
+}
 const { drag, begin } = usePoolDrag(boardRef, (id, pool, index) => emit('move', id, pool, index))
 let panPointer = -1
 let panOrigin = 0
@@ -164,8 +172,8 @@ function confirmMove(pool: string) {
             </button>
             <button type="button" class="pool-card-body" @click="emit('open', card.id)">
               <strong>{{ card.title || 'Untitled' }}</strong>
-              <span v-if="card.minAge == null && card.maxAge == null">Any age{{ card.mandatory ? ' · Mandatory' : '' }}</span>
-              <span v-else>Age {{ card.minAge ?? 0 }}–{{ card.maxAge ?? MAX_AGE }}{{ card.mandatory ? ' · Mandatory' : '' }}</span>
+              <span v-if="card.minAge == null && card.maxAge == null">Any age{{ ruleNote(card) }}</span>
+              <span v-else>Age {{ card.minAge ?? 0 }}–{{ card.maxAge ?? MAX_AGE }}{{ ruleNote(card) }}</span>
             </button>
             <div class="card-menu">
               <button type="button" class="icon-btn" :aria-label="`Duplicate ${card.title || 'Untitled'}`" @click="emit('duplicate', card.id)">

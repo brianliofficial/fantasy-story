@@ -16,6 +16,8 @@ function card(id: string, type: string): GameEventConfig {
   event.showLimit = 2
   event.repeatAfter = 4
   event.mandatory = true
+  event.possible = 40
+  event.gate = { stat: 'gold', op: '>', amount: 12 }
   event.requiredRace = ['Elf']
   event.requiredClass = ['Noble']
   event.requiredGender = ['female']
@@ -32,6 +34,9 @@ function card(id: string, type: string): GameEventConfig {
 describe('event pool workbook', () => {
   it('reads back the events and pool order', () => {
     const events = [card('toy', 'Child'), card('fair', 'Teenager')]
+    events[1]!.mandatory = undefined
+    events[1]!.possible = 40
+    events[1]!.gate = { stat: 'father', op: '>', amount: 40 }
     const bytes = eventPoolWorkbook(events, ['Child', 'Teenager', 'War'])
     const restored = readEventPoolWorkbook(bytes)
     assert.deepEqual(restored.pools, ['Child', 'Teenager', 'War'])
@@ -42,6 +47,8 @@ describe('event pool workbook', () => {
     assert.equal(restored.events[0]?.showLimit, 2)
     assert.equal(restored.events[0]?.repeatAfter, 4)
     assert.equal(restored.events[0]?.mandatory, true)
+    assert.equal(restored.events[0]?.possible, undefined)
+    assert.deepEqual(restored.events[0]?.gate, { stat: 'gold', op: '>', amount: 12 })
     assert.deepEqual(restored.events[0]?.requiredRace, ['Elf'])
     assert.deepEqual(restored.events[0]?.requiredClass, ['Noble'])
     assert.deepEqual(restored.events[0]?.requiredGender, ['female'])
@@ -50,6 +57,9 @@ describe('event pool workbook', () => {
     assert.equal(restored.events[0]?.options[0]?.goldCost, 40)
     assert.equal(restored.events[0]?.options[0]?.success.effect.charisma, 3)
     assert.equal(restored.events[1]?.id, 'fair')
+    assert.equal(restored.events[1]?.possible, 40)
+    assert.equal(restored.events[1]?.mandatory, undefined)
+    assert.deepEqual(restored.events[1]?.gate, { stat: 'father', op: '>', amount: 40 })
   })
 
   it('keeps an empty pool file empty', () => {

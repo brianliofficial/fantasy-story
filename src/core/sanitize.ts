@@ -7,8 +7,10 @@ import type {
   EventOption,
   HeirRole,
   GameConfig,
+  EventGate,
   GameEventConfig,
   AgeWindow,
+  BirthPlace,
   Betrothal,
   Gender,
   HouseholdDuty,
@@ -151,6 +153,10 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
     event.repeatAfter = 10
   }
   if (value.mandatory === true) event.mandatory = true
+  const possible = readChance(value.possible) ?? readChance(isRecord(firstOption) ? firstOption.possible : undefined)
+  if (!event.mandatory && possible != null) event.possible = possible
+  const gate = readGate(value.gate) ?? readGate(isRecord(firstOption) ? firstOption.gate : undefined)
+  if (gate && (event.mandatory || event.possible != null)) event.gate = gate
   const nameStandIn = heirList(value.nameStandIn) ?? heirList(firstOption?.nameStandIn)
   if (nameStandIn) event.nameStandIn = nameStandIn
   return event
@@ -158,11 +164,33 @@ export function sanitizeEvent(value: unknown): GameEventConfig | null {
 
 export function optionsForSave(event: GameEventConfig): EventOption[] {
   return event.options.map((option) => {
-    const stored = { ...option } as EventOption & { nameStandIn?: HeirRole[]; requiredGender?: Gender[] }
+    const stored = { ...option } as EventOption & { nameStandIn?: HeirRole[]; requiredGender?: Gender[]; gate?: EventGate; possible?: number }
     if (event.nameStandIn?.length) stored.nameStandIn = event.nameStandIn
     if (event.requiredGender?.length) stored.requiredGender = event.requiredGender
+    if (event.gate) stored.gate = event.gate
+    if (typeof event.possible === 'number') stored.possible = event.possible
     return stored
   })
+}
+
+function readChance(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function readGate(value: unknown): EventGate | undefined {
+  if (!isRecord(value)) return undefined
+  const stat = value.stat === 'gold' || value.stat === 'father' || value.stat === 'mother' || value.stat === 'sibling' || value.stat === 'brother' || value.stat === 'sister'
+    ? value.stat
+    : undefined
+  if (!stat) return undefined
+  const op = value.op === '<' || value.op === '>' ? value.op : undefined
+  const cap = stat === 'gold' ? 1000000 : 100
+  const amount = typeof value.amount === 'number' && Number.isFinite(value.amount)
+    ? Math.max(0, Math.min(cap, Math.round(value.amount)))
+    : undefined
+  if (!op || amount == null) return undefined
+  return { stat, op, amount }
 }
 
 export function sanitizeEvents(value: unknown): GameEventConfig[] | null {
@@ -185,6 +213,20 @@ function nameList(value: unknown, fallback: string[]): string[] {
   return parseNameList(value.filter((item): item is string => typeof item === 'string').join('\n'))
 }
 
+function wordList(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) return [...fallback]
+  const words = parseNameList(value.filter((item): item is string => typeof item === 'string').join('\n'))
+  return words.length > 0 ? words : [...fallback]
+}
+
+function placeParts(value: unknown, fallback: BirthPlace): BirthPlace {
+  if (!isRecord(value)) return { first: [...fallback.first], second: [...fallback.second] }
+  return {
+    first: wordList(value.first, fallback.first),
+    second: wordList(value.second, fallback.second),
+  }
+}
+
 function raceNames(value: unknown, fallback: RaceNames): RaceNames {
   if (!isRecord(value)) return {
     maleForenames: [...fallback.maleForenames],
@@ -205,6 +247,8 @@ export function sanitizeConfig(value: unknown): GameConfig {
   const names = isRecord(value.names) ? value.names : {}
   const housing = isRecord(value.housing) ? value.housing : {}
   const aging = isRecord(value.aging) ? value.aging : {}
+  const birthHome = isRecord(value.birthHome) ? value.birthHome : {}
+  const places = isRecord(birthHome.places) ? birthHome.places : {}
   return {
     races: {
       Elf: bonus(races.Elf, base.races.Elf),
@@ -239,6 +283,14 @@ export function sanitizeConfig(value: unknown): GameConfig {
     },
     classEvents: ageWindow(value.classEvents, base.classEvents),
     teenageAge: Math.max(0, Math.min(MAX_AGE, Math.round(numberOr(value.teenageAge, base.teenageAge)))),
+    birthHome: {
+      adjectives: wordList(birthHome.adjectives, base.birthHome.adjectives),
+      places: {
+        Elf: placeParts(places.Elf, base.birthHome.places.Elf),
+        Human: placeParts(places.Human, base.birthHome.places.Human),
+        Dwarf: placeParts(places.Dwarf, base.birthHome.places.Dwarf),
+      },
+    },
   }
 }
 
@@ -266,7 +318,7 @@ function sanitizeBetrothal(value: unknown): Betrothal | null {
 
 function sanitizePerson(value: unknown): Person | null {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string') return null
-  if (value.role !== 'parent' && value.role !== 'sibling' && value.role !== 'friend' && value.role !== 'teacher') return null
+  if (value.role !== 'parent' && value.role !== 'sibling' && value.role !== 'friend' && value.role !== 'teacher' && value.role !== 'child') return null
   if (value.gender !== 'male' && value.gender !== 'female') return null
   const age = numberOr(value.age, -1)
   if (age < 0 || age > MAX_AGE + 40) return null

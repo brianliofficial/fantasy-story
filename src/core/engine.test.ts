@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { ageTagFor } from './age'
 import { defaultConfig, houseFireEvent, seedEvents, teenageMilestone } from './defaults'
+import { sanitizeConfig } from './sanitize'
 import { ageUp, answerTeacher, applyEffect, askForGold, buyHouse, changeSubject, chooseOption, createLife, enroll, ensureParentBodies, eventMatches, infantAction, nameKin, openHousehold, quitSchool, runAway, seekTeacher, studyHard, takeJob, workWithParent, yearActivity } from './engine'
 import type { GameConfig, GameEventConfig, Life, NewCharacter } from './types'
 
@@ -92,6 +93,23 @@ describe('fantasylife engine', () => {
       socialClass: 'Noble',
     }, defaultConfig(), zero)
     assert.equal(human.log[1]?.text, 'You are born to a noble human family living in Brightspire. Your home is a beautiful, enormous manor.')
+    const edited = sanitizeConfig({
+      birthHome: {
+        adjectives: ['tiny', 'quiet'],
+        places: { Human: { first: ['Red'], second: ['ford'] } },
+      },
+    })
+    assert.deepEqual(edited.birthHome.adjectives, ['tiny', 'quiet'])
+    assert.deepEqual(edited.birthHome.places.Human, { first: ['Red'], second: ['ford'] })
+    assert.equal(edited.birthHome.places.Elf.first[0], 'Silver')
+    const custom = createLife({
+      forename: 'Aldric',
+      surname: 'Hale',
+      gender: 'male',
+      race: 'Human',
+      socialClass: 'Noble',
+    }, edited, zero)
+    assert.equal(custom.log[1]?.text, 'You are born to a noble human family living in Redford. Your home is a tiny, quiet manor.')
     assert.equal(life.people.find((person) => person.label === 'Mother')?.name, 'Siama Tevin')
     assert.equal(life.people.find((person) => person.label === 'Father')?.name, 'Illdros Tevin')
   })
@@ -144,6 +162,34 @@ describe('fantasylife engine', () => {
     assert.equal(paid.pendingOutcome?.passed, true)
     assert.equal(paid.gold, 0)
     assert.equal(paid.charisma, born().charisma + 2)
+  })
+
+  it('adds a friend or a child named in the outcome log', () => {
+    const market = seedEvents().find((event) => event.id === 'market-day') as GameEventConfig
+    const visit = {
+      ...market,
+      options: market.options.map((option) => option.id === 'haggle'
+        ? { ...option, checkStat: undefined, success: { log: 'You meet [GEN_FRIEND] and cradle [Gen_Children].', effect: {} } }
+        : option),
+    }
+    const next = chooseOption({ ...born(), age: 20, pendingEvent: visit }, 'haggle', defaultConfig(), zero)
+    const friend = next.people.find((person) => person.role === 'friend')
+    const child = next.people.find((person) => person.role === 'child')
+    assert.ok(friend && child)
+    assert.equal(friend.name, 'Tomas Harwick')
+    assert.equal(friend.label, 'Friend')
+    assert.equal(friend.age, 20)
+    assert.equal(friend.relationship, 40)
+    assert.equal(friend.constitution, 55)
+    assert.equal(child.name, 'Henrik Hale')
+    assert.equal(child.label, 'Son')
+    assert.equal(child.age, 0)
+    assert.equal(child.relationship, 80)
+    assert.equal(next.pendingOutcome?.log, 'You meet Tomas Harwick and cradle Henrik Hale.')
+    const noble = chooseOption({ ...born({ socialClass: 'Noble' }), age: 20, pendingEvent: visit }, 'haggle', defaultConfig(), zero)
+    assert.equal(noble.people.find((person) => person.role === 'friend')?.title, undefined)
+    assert.equal(noble.people.find((person) => person.role === 'child')?.title, 'Knight')
+    assert.equal(noble.pendingOutcome?.log, 'You meet Tomas Harwick and cradle Knight Henrik Hale.')
   })
 
   it('shows a trade, substitutes a chosen relative, and otherwise picks someone at random', () => {
@@ -809,6 +855,75 @@ describe('fantasylife engine', () => {
     const later = ageUp({ ...born(), age: 8 }, [field, vow], defaultConfig(), zero)
     assert.equal(later.age, 9)
     assert.equal(later.pendingEvent?.id, 'field')
+  })
+
+  it('shows a mandatory event when the gold or relationship if matches', () => {
+    const quiet: GameEventConfig = {
+      id: 'quiet',
+      type: 'Anytime',
+      title: 'Quiet',
+      description: 'A quiet year.',
+      minAge: 8,
+      maxAge: 8,
+      options: [{ id: 'wait', text: 'Wait', success: { log: 'You wait.', effect: {} } }],
+    }
+    const rich: GameEventConfig = {
+      id: 'rich',
+      type: 'Anytime',
+      title: 'Rich',
+      description: 'A rich year.',
+      minAge: 8,
+      maxAge: 8,
+      mandatory: true,
+      gate: { stat: 'gold', op: '>', amount: 10 },
+      options: [{ id: 'spend', text: 'Spend', success: { log: 'You spend.', effect: {} } }],
+    }
+    const held = { ...born(), age: 7, occupation: { title: 'Farmer', salary: 0 }, gold: 10, pendingEvent: null }
+    assert.equal(ageUp(held, [quiet, rich], defaultConfig(), zero).pendingEvent?.id, 'quiet')
+    assert.equal(ageUp({ ...held, gold: 11 }, [quiet, rich], defaultConfig(), zero).pendingEvent?.id, 'rich')
+
+    const visit: GameEventConfig = {
+      ...rich,
+      id: 'visit',
+      gate: { stat: 'mother', op: '>', amount: 50 },
+    }
+    assert.equal(ageUp(held, [quiet, visit], defaultConfig(), zero).pendingEvent?.id, 'visit')
+    const distant: GameEventConfig = { ...visit, id: 'distant', gate: { stat: 'mother', op: '>', amount: 80 } }
+    assert.equal(ageUp(held, [quiet, distant], defaultConfig(), zero).pendingEvent?.id, 'quiet')
+    const brother: GameEventConfig = { ...visit, id: 'brother', gate: { stat: 'brother', op: '>', amount: 10 } }
+    assert.equal(ageUp(held, [quiet, brother], defaultConfig(), zero).pendingEvent?.id, 'quiet')
+    const alone = {
+      ...held,
+      people: held.people.map((person) => ({ ...person, alive: false })),
+    }
+    assert.equal(ageUp(alone, [quiet, visit], defaultConfig(), zero).pendingEvent?.id, 'quiet')
+  })
+
+  it('shows a possible event on its percent when the age matches', () => {
+    const quiet: GameEventConfig = {
+      id: 'quiet',
+      type: 'Anytime',
+      title: 'Quiet',
+      description: 'A quiet year.',
+      minAge: 8,
+      maxAge: 8,
+      options: [{ id: 'wait', text: 'Wait', success: { log: 'You wait.', effect: {} } }],
+    }
+    const maybe: GameEventConfig = {
+      id: 'maybe',
+      type: 'Anytime',
+      title: 'Maybe',
+      description: 'A chance.',
+      minAge: 8,
+      maxAge: 8,
+      possible: 50,
+      gate: { stat: 'gold', op: '<', amount: 5 },
+      options: [{ id: 'try', text: 'Try', success: { log: 'You try.', effect: {} } }],
+    }
+    const held = { ...born(), age: 7, occupation: { title: 'Farmer', salary: 0 }, gold: 4, pendingEvent: null }
+    assert.equal(ageUp(held, [quiet, maybe], defaultConfig(), zero).pendingEvent?.id, 'maybe')
+    assert.equal(ageUp(held, [quiet, maybe], defaultConfig(), () => 0.99).pendingEvent?.id, 'quiet')
+    assert.equal(ageUp({ ...held, gold: 5 }, [quiet, maybe], defaultConfig(), zero).pendingEvent?.id, 'quiet')
   })
 
   it('forces the teenage milestone and takes a job only at constitution 100', () => {

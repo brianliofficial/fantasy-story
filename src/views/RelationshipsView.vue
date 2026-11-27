@@ -15,6 +15,7 @@ watch(life, (value) => {
 const groups: { key: string; title: string; match: (person: Person) => boolean }[] = [
   { key: 'parents', title: 'Parents', match: (person) => person.alive && person.role === 'parent' },
   { key: 'siblings', title: 'Siblings', match: (person) => person.alive && person.role === 'sibling' },
+  { key: 'children', title: 'Children', match: (person) => person.alive && person.role === 'child' },
   { key: 'friends', title: 'Friends', match: (person) => person.alive && person.role === 'friend' },
   { key: 'teachers', title: 'Teachers', match: (person) => person.alive && person.role === 'teacher' },
   { key: 'late', title: 'Late relationships', match: (person) => !person.alive },

@@ -27,7 +27,7 @@ export function ensureNobleTitles<T extends Pick<Life, 'socialClass' | 'title' |
   const title = isNobleTitle(life.title) ? life.title : nobleTitle(random)
   let changed = title !== life.title
   const people = life.people.map((person) => {
-    if (person.role !== 'parent' && person.role !== 'sibling') return person
+    if (person.role !== 'parent' && person.role !== 'sibling' && person.role !== 'child') return person
     if (isNobleTitle(person.title)) return person
     const rank = isNobleTitle(person.occupation) ? person.occupation : nobleTitle(random)
     changed = true

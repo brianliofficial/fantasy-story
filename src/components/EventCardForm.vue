@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { agePoolFor } from '../core/age'
 import { uid } from '../core/id'
 import { cloneData } from '../core/clone'
-import type { CheckStat, EventOption, GameEventConfig, Gender, HeirRole, Race, SocialClass, StatChange } from '../core/types'
-import { CHECK_STATS, CLASSES, GENDERS, HEIR_ROLES, RACES } from '../core/types'
+import type { CheckStat, EventOption, GameEventConfig, GateOp, Gender, HeirRole, Race, SocialClass, StatChange } from '../core/types'
+import { CHECK_STATS, CLASSES, GATE_STATS, GENDERS, HEIR_ROLES, RACES } from '../core/types'
 
 const props = defineProps<{ event: GameEventConfig; error?: string; pools: string[] }>()
 const emit = defineEmits<{ change: [event: GameEventConfig]; save: [event: GameEventConfig]; remove: [id: string] }>()
@@ -14,6 +14,7 @@ const optionIndex = ref(0)
 const pendingOption = ref<number | null>(null)
 const logSide = ref<'success' | 'failure'>('success')
 const effectDrafts = ref<Record<string, string>>({})
+const wantPossible = ref(false)
 
 const current = computed(() => props.event.options[optionIndex.value] ?? props.event.options[0])
 const hasCheck = computed(() => Boolean(current.value?.checkStat || current.value?.checkLuck))
@@ -25,6 +26,10 @@ watch(() => props.event.options.length, (length) => {
 watch(hasCheck, (value) => {
   if (!value) logSide.value = 'success'
 })
+
+watch(() => props.event.id, () => {
+  wantPossible.value = typeof props.event.possible === 'number'
+}, { immediate: true })
 
 function clone(): GameEventConfig {
   return cloneData(props.event)
@@ -54,6 +59,58 @@ function toggleClass(socialClass: SocialClass) {
   if (currentClasses.has(socialClass)) currentClasses.delete(socialClass)
   else currentClasses.add(socialClass)
   update({ requiredClass: currentClasses.size ? [...currentClasses] : undefined })
+}
+
+function toggleMandatory(checked: boolean) {
+  wantPossible.value = false
+  update({ mandatory: checked || undefined, possible: undefined, gate: undefined })
+}
+
+function togglePossible(checked: boolean) {
+  wantPossible.value = checked
+  update({ mandatory: undefined, possible: undefined, gate: undefined })
+}
+
+function setPossible(raw: string) {
+  wantPossible.value = true
+  if (raw.trim() === '') {
+    update({ mandatory: undefined, possible: undefined })
+    return
+  }
+  if (!/^\d+$/.test(raw.trim())) return
+  update({ mandatory: undefined, possible: Math.max(0, Math.min(100, Number(raw))) })
+}
+
+function setGateStat(stat: string) {
+  if (!GATE_STATS.includes(stat as typeof GATE_STATS[number])) {
+    update({ gate: undefined })
+    return
+  }
+  const next = stat as typeof GATE_STATS[number]
+  const current = props.event.gate
+  const op: GateOp = current?.op === '<' ? '<' : '>'
+  const sameScale = current?.stat === 'gold' ? next === 'gold' : next !== 'gold'
+  update({ gate: { stat: next, op, ...(sameScale && current?.amount != null ? { amount: current.amount } : {}) } })
+}
+
+function setGateOp(op: GateOp) {
+  const stat = props.event.gate?.stat
+  if (!stat) return
+  const amount = props.event.gate?.amount
+  update({ gate: { stat, op, ...(amount != null ? { amount } : {}) } })
+}
+
+function setGateAmount(raw: string) {
+  const stat = props.event.gate?.stat
+  if (!stat) return
+  const op: GateOp = props.event.gate?.op === '<' ? '<' : '>'
+  if (raw.trim() === '') {
+    update({ gate: { stat, op } })
+    return
+  }
+  if (!/^\d+$/.test(raw.trim())) return
+  const cap = stat === 'gold' ? 1000000 : 100
+  update({ gate: { stat, op, amount: Math.min(cap, Number(raw)) } })
 }
 
 function toggleGender(gender: Gender) {
@@ -304,11 +361,54 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         </label>
       </div>
       <p class="hint">Leave an age blank to leave that side open. Leave both blank and the event can happen at any age.</p>
-      <label class="check-row">
-        <input type="checkbox" :checked="event.mandatory === true" @change="update({ mandatory: ($event.target as HTMLInputElement).checked || undefined })" />
-        Mandatory
-      </label>
       <p v-if="event.type === 'Anytime'" class="hint">Anytime events appear at most 5 times in one life. Years between keeps a repeat from happening again until that many years have passed.</p>
+      <div class="check-row">
+        <label>
+          <input type="checkbox" :checked="event.mandatory === true" @change="toggleMandatory(($event.target as HTMLInputElement).checked)" />
+          Mandatory
+        </label>
+        <template v-if="event.mandatory">
+          <span>if</span>
+          <select :value="event.gate?.stat ?? ''" aria-label="Mandatory if" @change="setGateStat(($event.target as HTMLSelectElement).value)">
+            <option value="">None</option>
+            <option v-for="stat in GATE_STATS" :key="stat" :value="stat">{{ stat }}</option>
+          </select>
+          <template v-if="event.gate?.stat">
+            <select :value="event.gate.op ?? '>'" aria-label="Mandatory comparison" @change="setGateOp(($event.target as HTMLSelectElement).value === '<' ? '<' : '>')">
+              <option value="<">&lt;</option>
+              <option value=">">&gt;</option>
+            </select>
+            <input :value="event.gate.amount ?? ''" type="number" min="0" :max="event.gate.stat === 'gold' ? 1000000 : 100" aria-label="Mandatory amount" @input="setGateAmount(($event.target as HTMLInputElement).value)" />
+          </template>
+        </template>
+      </div>
+      <p v-if="event.mandatory && event.gate?.stat && event.gate.stat !== 'gold'" class="hint">The number is that person's bond, from 0 to 100. Sibling means any living brother or sister.</p>
+      <div class="check-row">
+        <label>
+          <input type="checkbox" :checked="wantPossible" @change="togglePossible(($event.target as HTMLInputElement).checked)" />
+          Only possible
+        </label>
+        <template v-if="wantPossible">
+          <span>if</span>
+          <select :value="event.gate?.stat ?? ''" aria-label="Only possible if" @change="setGateStat(($event.target as HTMLSelectElement).value)">
+            <option value="">None</option>
+            <option v-for="stat in GATE_STATS" :key="`possible-${stat}`" :value="stat">{{ stat }}</option>
+          </select>
+          <template v-if="event.gate?.stat">
+            <select :value="event.gate.op ?? '>'" aria-label="Only possible comparison" @change="setGateOp(($event.target as HTMLSelectElement).value === '<' ? '<' : '>')">
+              <option value="<">&lt;</option>
+              <option value=">">&gt;</option>
+            </select>
+            <input :value="event.gate.amount ?? ''" type="number" min="0" :max="event.gate.stat === 'gold' ? 1000000 : 100" aria-label="Only possible amount" @input="setGateAmount(($event.target as HTMLInputElement).value)" />
+          </template>
+          <label class="chance">Chance
+            <input :value="event.possible ?? ''" type="number" min="0" max="100" aria-label="Chance percent" @input="setPossible(($event.target as HTMLInputElement).value)" />
+            %
+          </label>
+        </template>
+      </div>
+      <p v-if="wantPossible && event.gate?.stat && event.gate.stat !== 'gold'" class="hint">The number is that person's bond, from 0 to 100. Sibling means any living brother or sister.</p>
+      <p class="hint">Check Mandatory or Only possible. Each one keeps its own if. Mandatory shows on every Age Up when the age and if match. Only possible shows on that percent of those years.</p>
       <p class="hint">Race filter. Leave all off to allow every race.</p>
       <div class="toggle-row">
         <button v-for="race in RACES" :key="race" type="button" class="pill" :class="{ 'is-selected': event.requiredRace?.includes(race) }" @click="toggleRace(race)">{{ race }}</button>
@@ -404,7 +504,7 @@ const poolBand = computed(() => agePoolFor(props.event.type))
         <button type="button" class="tab" role="tab" :aria-selected="logSide === 'success'" :class="{ 'is-selected': logSide === 'success' }" @click="logSide = 'success'">Success log</button>
         <button v-if="hasCheck" type="button" class="tab" role="tab" :aria-selected="logSide === 'failure'" :class="{ 'is-selected': logSide === 'failure' }" @click="logSide = 'failure'">Failure log</button>
       </div>
-      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and that character's name is shown instead. Write [mother_job] and the mother's trade is shown. [father_job], [brother_job], [sister_job], [sibling_job], and [friend_job] follow the same rule. Write [mother_die] when that person dies. [father_die], [brother_die], [sister_die], [sibling_die], and [friend_die] follow the same rule.</p>
+      <p class="hint">Write [mother], [father], [brother], [sister], [sibling], or [friend] and that character's name is shown instead. Write [mother_job] and the mother's trade is shown. [father_job], [brother_job], [sister_job], [sibling_job], and [friend_job] follow the same rule. Write [mother_die] when that person dies. [father_die], [brother_die], [sister_die], [sibling_die], and [friend_die] follow the same rule. Write [gen_friend] to add a new friend, or [gen_children] to add a new son or daughter. Each token adds one person and becomes that person's name.</p>
       <div class="tab-panel log-panel">
       <template v-if="logSide === 'success'">
         <label class="field">Success log
@@ -453,17 +553,38 @@ const poolBand = computed(() => agePoolFor(props.event.type))
 <style lang="scss" scoped>
 .check-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   min-height: 44px;
   font-weight: 700;
 
-  input {
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  input[type='checkbox'] {
     width: 18px;
     height: 18px;
     accent-color: #c9a252;
   }
+
+  select, input[type='number'] {
+    width: auto;
+    min-width: 4.5rem;
+    height: 36px;
+    border: 1px solid #594321;
+    border-radius: 12px;
+    padding: 6px 10px;
+    background: #130e0b;
+    color: var(--ink);
+    font-weight: 600;
+  }
 }
+
+.chance input { width: 4.5rem; }
 
 .event-card {
   background: var(--card);

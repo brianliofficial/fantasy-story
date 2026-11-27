@@ -1,3 +1,4 @@
+import { defaultBirthHome } from './birthHome'
 import { uid } from './id'
 import { defaultRaceNames } from './names'
 import type { EventOption, GameConfig, GameEventConfig } from './types'
@@ -32,6 +33,7 @@ export const defaultConfig = (): GameConfig => ({
   },
   classEvents: { minAge: 7, maxAge: 13 },
   teenageAge: 16,
+  birthHome: defaultBirthHome(),
 })
 
 function option(

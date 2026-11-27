@@ -5,7 +5,7 @@ export type EventType = (typeof DEFAULT_POOLS)[number]
 export type CheckStat = 'constitution' | 'charisma' | 'intelligence'
 export type KinRole = 'mother' | 'father' | 'brother' | 'sister' | 'sibling' | 'friend'
 export type HeirRole = 'father' | 'mother' | 'brother' | 'sister'
-export type RelationRole = 'parent' | 'sibling' | 'friend' | 'teacher'
+export type RelationRole = 'parent' | 'sibling' | 'friend' | 'teacher' | 'child'
 export type MenuKey = 'infant' | 'childhood' | 'job' | 'school' | 'romance' | 'crime' | 'guild' | 'assets' | 'activities'
 export type Gender = 'male' | 'female'
 export type PersonActivity = 'compliment' | 'conversation' | 'ask' | 'gift'
@@ -43,6 +43,16 @@ export interface EventOption {
   }
 }
 
+export type GateStat = 'gold' | 'father' | 'mother' | 'sibling' | 'brother' | 'sister'
+export type GateOp = '<' | '>'
+export const GATE_STATS: GateStat[] = ['gold', 'father', 'mother', 'sibling', 'brother', 'sister']
+
+export interface EventGate {
+  stat: GateStat
+  op?: GateOp
+  amount?: number
+}
+
 export interface GameEventConfig {
   id: string
   type: string
@@ -56,6 +66,8 @@ export interface GameEventConfig {
   showLimit?: number
   repeatAfter?: number
   mandatory?: boolean
+  possible?: number
+  gate?: EventGate
   nameStandIn?: HeirRole[]
   options: EventOption[]
 }
@@ -85,6 +97,16 @@ export interface AgeWindow {
   maxAge?: number
 }
 
+export interface BirthPlace {
+  first: string[]
+  second: string[]
+}
+
+export interface BirthHomeWords {
+  adjectives: string[]
+  places: Record<Race, BirthPlace>
+}
+
 export interface GameConfig {
   races: Record<Race, RaceBonus>
   names: Record<Race, RaceNames>
@@ -96,6 +118,7 @@ export interface GameConfig {
   menus: Record<MenuKey, AgeWindow>
   classEvents: AgeWindow
   teenageAge: number
+  birthHome: BirthHomeWords
 }
 
 export interface Person {

@@ -3,7 +3,8 @@ import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useGame } from '../composables/useGame'
 import { cloneData } from '../core/clone'
 import { parseNameList } from '../core/names'
-import type { GameConfig, Race, RaceNames } from '../core/types'
+import { defaultBirthHome } from '../core/birthHome'
+import type { BirthPlace, GameConfig, Race, RaceNames } from '../core/types'
 import { CLASSES, RACES } from '../core/types'
 
 const { config, saveConfig, resetConfig } = useGame()
@@ -43,10 +44,47 @@ function applyNameText() {
   syncNameText()
 }
 
+const birthText = reactive({
+  adjectives: '',
+  places: {
+    Elf: { first: '', second: '' },
+    Human: { first: '', second: '' },
+    Dwarf: { first: '', second: '' },
+  } as Record<Race, Record<keyof BirthPlace, string>>,
+})
+
+function syncBirthText() {
+  birthText.adjectives = draft.birthHome.adjectives.join('\n')
+  for (const race of RACES) {
+    birthText.places[race].first = draft.birthHome.places[race].first.join('\n')
+    birthText.places[race].second = draft.birthHome.places[race].second.join('\n')
+  }
+}
+
+function keptWords(text: string, fallback: string[]): string[] {
+  const words = parseNameList(text)
+  return words.length > 0 ? words : [...fallback]
+}
+
+function applyBirthText() {
+  const fallback = defaultBirthHome()
+  draft.birthHome.adjectives = keptWords(birthText.adjectives, fallback.adjectives)
+  for (const race of RACES) {
+    draft.birthHome.places[race] = {
+      first: keptWords(birthText.places[race].first, fallback.places[race].first),
+      second: keptWords(birthText.places[race].second, fallback.places[race].second),
+    }
+  }
+  syncBirthText()
+}
+
+if (!draft.birthHome?.adjectives || !draft.birthHome.places?.Elf) draft.birthHome = defaultBirthHome()
 syncNameText()
+syncBirthText()
 
 function persist() {
   applyNameText()
+  applyBirthText()
   saveConfig(cloneData(draft))
   saved.value = true
 }
@@ -55,6 +93,7 @@ function restore() {
   resetConfig()
   Object.assign(draft, cloneData(config.value))
   syncNameText()
+  syncBirthText()
   saved.value = false
 }
 </script>
@@ -122,6 +161,24 @@ function restore() {
           <input v-model.number="draft.aging.constitutionLossPerYear" type="number" min="0" max="20" />
         </label>
       </section>
+      <section class="card names-span">
+        <h2>Birth home</h2>
+        <p class="hint">One word per line. A place name joins a first word and a second word, such as Silver and glen becoming Silverglen. Two different adjectives describe the home. Leave a list empty to keep its default words.</p>
+        <label class="field">Adjectives
+          <textarea v-model="birthText.adjectives" rows="6" spellcheck="false" />
+        </label>
+        <div class="birth-grid">
+          <div v-for="race in RACES" :key="`place-${race}`" class="option-card">
+            <h2>{{ race.toUpperCase() }}</h2>
+            <label class="field">Place, first word
+              <textarea v-model="birthText.places[race].first" rows="4" spellcheck="false" />
+            </label>
+            <label class="field">Place, second word
+              <textarea v-model="birthText.places[race].second" rows="4" spellcheck="false" />
+            </label>
+          </div>
+        </div>
+      </section>
     </div>
     <div class="stack">
       <p v-if="saved" class="hint">Saved in this browser.</p>
@@ -141,8 +198,14 @@ function restore() {
   padding: 16px;
 }
 
+.birth-grid {
+  display: grid;
+  gap: 12px;
+}
+
 @media (min-width: 900px) {
   .admin-grid { grid-template-columns: 1fr 1fr; }
   .names-span { grid-column: 1 / -1; }
+  .birth-grid { grid-template-columns: repeat(3, 1fr); }
 }
 </style>

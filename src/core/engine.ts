@@ -17,8 +17,8 @@ import {
 } from './childhood'
 import { agePoolFor } from './age'
 import { birthHome } from './birthHome'
-import { HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
-import { ensureNobleTitles, lifeName, personName } from './titles'
+import { defaultConfig, HOUSE_FIRE_ID, TEENAGE_ID } from './defaults'
+import { ensureNobleTitles, lifeName, nobleTitle, personName } from './titles'
 import { uid } from './id'
 import { cleanNamePart, pickDistinct, randomIdentity } from './names'
 import type {
@@ -181,7 +181,7 @@ export function createLife(
     duty: 'ready',
     log: [
       entry(0, `You are a ${input.gender} ${input.socialClass.toLowerCase()} ${input.race.toLowerCase()} named ${lifeName({ name, title: rank })}. Your mother is ${personName(shown.find((person) => person.label === 'Mother') ?? mother)}. Your father is ${personName(shown.find((person) => person.label === 'Father') ?? father)}.`),
-      entry(0, birthHome(input.race, input.socialClass, random)),
+      entry(0, birthHome(input.race, input.socialClass, random, config.birthHome)),
     ],
     alive: true,
     deathReason: null,
@@ -286,7 +286,28 @@ export function eventMatches(event: GameEventConfig, life: Life): boolean {
   if (event.requiredRace && event.requiredRace.length > 0 && !event.requiredRace.includes(life.race)) return false
   if (event.requiredClass && event.requiredClass.length > 0 && !event.requiredClass.includes(life.socialClass)) return false
   if (event.requiredGender && event.requiredGender.length > 0 && !event.requiredGender.includes(life.gender)) return false
+  if (!gateMatches(event, life)) return false
   return event.options.length > 0
+}
+
+function gateMatches(event: GameEventConfig, life: Life): boolean {
+  const gate = event.gate
+  if (!gate || gate.amount == null) return true
+  const amount = gate.amount
+  const below = gate.op === '<'
+  const above = gate.op === '>'
+  if (!below && !above) return true
+  if (gate.stat === 'gold') return below ? life.gold < amount : life.gold > amount
+  const bonds = life.people
+    .filter((person) => person.alive && matchesKin(person, gate.stat))
+    .map((person) => person.relationship)
+  if (bonds.length === 0) return false
+  return bonds.some((bond) => below ? bond < amount : bond > amount)
+}
+
+function offerChance(event: GameEventConfig, random: () => number): boolean {
+  if (event.mandatory || typeof event.possible !== 'number') return true
+  return randomInt(random, 1, 100) <= event.possible
 }
 
 function poolOpen(type: string, age: number, config: GameConfig, socialClass: SocialClass): boolean {
@@ -409,7 +430,7 @@ export function ageUp(
   }
 
   const milestone = events.find((event) => event.type === 'Milestone' && eventMatches(event, next) && canOffer(next, event))
-  if (milestone) {
+  if (milestone && offerChance(milestone, random)) {
     const logged = milestone.id === TEENAGE_ID && next.school
       ? { ...next, log: [...next.log, entry(next.age, 'You reach the end of your basic education.')] }
       : next
@@ -424,6 +445,14 @@ export function ageUp(
   ))
   const mandatory = eligible.filter((event) => event.mandatory)
   if (mandatory.length > 0) eligible = mandatory
+  else {
+    const possible = eligible.filter((event) => typeof event.possible === 'number')
+    const regular = eligible.filter((event) => typeof event.possible !== 'number')
+    if (possible.length > 0) {
+      const rolled = possible.filter((event) => offerChance(event, random))
+      eligible = rolled.length > 0 ? rolled : regular
+    }
+  }
   if (eligible.length === 0) {
     return {
       ...next,
@@ -469,7 +498,7 @@ export function chooseOption(
   let next = applyEffect(paid, outcome.effect)
   if (option.clearHouse) next = { ...next, house: null }
   next = applyIdentity(next, option)
-  const told = applyOutcomeLog(next, outcome.log, random, life.pendingEvent.nameStandIn ?? [])
+  const told = applyOutcomeLog(next, outcome.log, random, life.pendingEvent.nameStandIn ?? [], _config)
   next = {
     ...told.life,
     pendingEvent: null,
@@ -735,14 +764,77 @@ function inheritance(life: Life, deaths: Set<string>): { gold: number; note: str
   return { gold, note: notes.length > 0 ? `${notes.join('. ')}.` : '' }
 }
 
+function playerSurname(life: Life): string {
+  const parts = life.name.trim().split(/\s+/)
+  return parts[parts.length - 1] || 'Hale'
+}
+
+function generatedPerson(
+  life: Life,
+  kind: 'friend' | 'child',
+  random: () => number,
+  config: GameConfig,
+  taken: Set<string>,
+): Person {
+  const gender: Gender = random() < 0.5 ? 'male' : 'female'
+  const names = config.names[life.race]
+  const forenames = gender === 'female' ? names.femaleForenames : names.maleForenames
+  const avoid = new Set<string>()
+  taken.forEach((name) => {
+    avoid.add(name)
+    const first = name.split(' ')[0]
+    if (first) avoid.add(first)
+  })
+  const forename = pickDistinct(forenames, random, avoid, gender === 'female' ? 'Mira' : 'Alden')
+  const surname = kind === 'child' ? playerSurname(life) : pickDistinct(names.surnames, random, avoid, 'Hale')
+  let name = `${forename} ${surname}`.trim()
+  if (taken.has(name.toLowerCase())) name = `${forename} ${surname} ${taken.size + 1}`
+  taken.add(name.toLowerCase())
+  taken.add(forename.toLowerCase())
+  const child = kind === 'child'
+  const person: Person = {
+    id: uid(),
+    name,
+    role: child ? 'child' : 'friend',
+    label: child ? (gender === 'female' ? 'Daughter' : 'Son') : 'Friend',
+    gender,
+    age: child ? 0 : life.age,
+    relationship: child ? 80 : 40,
+    constitution: rollConstitution(random, config.races[life.race].constitution),
+    alive: true,
+  }
+  if (child && life.socialClass === 'Noble') person.title = nobleTitle(random)
+  return person
+}
+
+function spawnRelatives(
+  life: Life,
+  text: string,
+  random: () => number,
+  config: GameConfig,
+): { people: Person[]; text: string } {
+  if (!/\[gen_(friend|children)\]/i.test(text)) return { people: life.people, text }
+  const people = [...life.people]
+  const taken = new Set(people.map((person) => person.name.toLowerCase()).concat(life.name.toLowerCase()))
+  const told = text.replace(/\[gen_(friend|children)\]/gi, (_mark, kind: string) => {
+    const person = generatedPerson(life, kind.toLowerCase() === 'friend' ? 'friend' : 'child', random, config, taken)
+    people.push(person)
+    return personName(person)
+  })
+  return { people, text: told }
+}
+
 function applyOutcomeLog(
   life: Life,
   text: string,
   random: () => number,
   standIn: HeirRole[] = [],
+  config?: GameConfig,
 ): { life: Life; text: string } {
+  const spawned = spawnRelatives(life, text, random, config ?? defaultConfig())
+  const host = spawned.people === life.people ? life : { ...life, people: spawned.people }
   const deaths = new Set<string>()
-  const resolved = nameKin(text.replace(/\[(mother|father|brother|sister|sibling|friend|wholefamily)_die\]/gi, (mark, token: string) => {
+  const resolved = nameKin(spawned.text.replace(/\[(mother|father|brother|sister|sibling|friend|wholefamily)_die\]/gi, (mark, token: string) => {
     const kind = token.toLowerCase()
     const matches = life.people.filter((item) => matchesKin(item, kind))
     if (kind === 'wholefamily') {
@@ -756,10 +848,10 @@ function applyOutcomeLog(
     deaths.add(living.id)
     return `${personName(living)} dies`
   }), life, random, standIn)
-  const willed = inheritance(life, deaths)
+  const willed = inheritance(host, deaths)
   const told = willed.note ? `${resolved} ${willed.note}` : resolved
-  if (deaths.size === 0 && willed.gold === 0) return { life, text: told }
-  const people = life.people.map((person) => (
+  if (deaths.size === 0 && willed.gold === 0) return { life: host, text: told }
+  const people = host.people.map((person) => (
     deaths.has(person.id) ? { ...person, alive: false, diedYearsAgo: 0, gold: 0 } : person
   ))
   const next = { ...life, people, gold: life.gold + willed.gold }
